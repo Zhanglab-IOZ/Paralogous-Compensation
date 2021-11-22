@@ -1,0 +1,419 @@
+library(dplyr);library(reshape2);library(ggplot2);library(gridExtra)
+
+colors = c("#F8766D", "#2E38FF", "#CC9900", "#00CC99", "#00CCFF", "#9999FF", "#FF66CC")
+###HCT116. T21 mean count and then log2fc
+test <- read.table("../datafiles/HCT116.count.table", sep="\t")
+test.hct116 <- test
+
+a <- sort(test$hct116.T0.rep1, decreasing=T)[9300]
+b <- sort(test$hct116.T0.rep2, decreasing=T)[9300]
+test.rep1 <- test[,c(1:6,7,9,11,13,15,17)]  %>% filter( hct116.T0.rep1 >= a ) %>% filter(hct116.T9.rep1 > 1 & hct116.T18.rep1 > 1 & hct116.T21.rep1.1 > 1 & hct116.T21.rep1.2 > 1 & hct116.T21.rep1.3 > 1 )
+test.rep2 <- test[,c(1:6,8,10,12,14,16,18)] %>% filter( hct116.T0.rep2 >= b ) %>% filter(hct116.T9.rep2 > 1 & hct116.T18.rep2 > 1 & hct116.T21.rep2.1 > 1 & hct116.T21.rep2.2 > 1 & hct116.T21.rep2.3 > 1 )
+dim(test.rep1)
+dim(test.rep2)
+
+mymean <- function(x){return( exp(mean(log(x))) )}
+s <- apply(test.rep1[,10:12],1,mymean)
+s <- c( median(test.rep1[,10]/s), median(test.rep1[,11]/s), median(test.rep1[,12]/s) )   ###Normalization read count among technical replicates. Like DESeq method
+test.rep1[,10:12] <- sweep(test.rep1[,10:12],2,s/min(s),'/')
+s <- apply(test.rep2[,10:12],1,mymean)
+s <- c( median(test.rep2[,10]/s), median(test.rep2[,11]/s), median(test.rep2[,12]/s) )
+test.rep2[,10:12] <- sweep(test.rep2[,10:12],2,s/min(s),'/')
+
+test.rep1 <- test.rep1 %>% mutate(hct116.T9.rep1.log2fc = log2(hct116.T9.rep1) - log2(hct116.T0.rep1), hct116.T18.rep1.log2fc = log2(hct116.T18.rep1) - log2(hct116.T0.rep1), hct116.T21.rep1.log2fc = log2( (hct116.T21.rep1.1 + hct116.T21.rep1.2 + hct116.T21.rep1.3)/3 ) - log2(hct116.T0.rep1) )
+test.rep2 <- test.rep2 %>% mutate(hct116.T9.rep2.log2fc = log2(hct116.T9.rep2) - log2(hct116.T0.rep2), hct116.T18.rep2.log2fc = log2(hct116.T18.rep2) - log2(hct116.T0.rep2), hct116.T21.rep2.log2fc = log2( (hct116.T21.rep2.1 + hct116.T21.rep2.2 + hct116.T21.rep2.3)/3 ) - log2(hct116.T0.rep2) )
+
+
+###Modeling variance
+CheckVar <- function( datafile, para0, para1, nstrata = 10){
+s <- datafile[ order(datafile[, para0]), ]
+s$strata <- findInterval(s[, para0], c(quantile(s[, para0], c( 1:(nstrata-1)/nstrata )) ))
+
+s.new <- aggregate(s[, para0], by=list(s$strata), median) %>% inner_join(aggregate(s[, para1], by=list(s$strata), sd), by="Group.1")
+names(s.new) <- c("Strata", "Strata.count", "Strata.sd")
+s.new$Data <- para1
+return(s.new)
+}
+
+test.rep1 <- test.rep1 %>% arrange(hct116.T0.rep1) ###It is important to arrange according T0 read count first.
+test.rep2 <- test.rep2 %>% arrange(hct116.T0.rep2)
+
+s1 <- CheckVar(test.rep1 %>% filter(V1 == "control"), "hct116.T0.rep1", "hct116.T21.rep1.log2fc", nstrata = 15)
+s2 <- CheckVar(test.rep2 %>% filter(V1 == "control"), "hct116.T0.rep2", "hct116.T21.rep2.log2fc", nstrata = 15)
+rbind.data.frame(s1, s2) %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("T0 count") + ylab("SD")   ###To be modeled
+
+
+###Weight mean. Based on linear regression fit
+s1.fit <- nls(Strata.sd ~ (a - b)*exp(Strata.count * k) + b, data = s1 %>% mutate(Strata.count = log10(Strata.count)), start = list(a = max(s1$Strata.sd) * 2, b = min(s1$Strata.sd), k = -1 ) )
+s2.fit <- nls(Strata.sd ~ (a - b)*exp(Strata.count * k) + b, data = s2 %>% mutate(Strata.count = log10(Strata.count)), start = list(a = max(s1$Strata.sd) * 2, b = min(s1$Strata.sd), k = -1 ) )
+rbind.data.frame(s1, s2) %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("T0 count") + ylab("SD") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(1.7, 4.5, 0.1), "V2"=predict(s1.fit, data.frame("Strata.count"=seq(1.7, 4.5, 0.1)))), lty="dashed" ) + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(1.7, 4.5, 0.1), "V2"=predict(s2.fit, data.frame("Strata.count"=seq(1.7, 4.5, 0.1)))), lty="dashed" )  + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000))
+
+s1.fit.formula = "SD =  3.60 * exp( -0.54 * log10(Count) ) - 0.42"
+s2.fit.formula = "SD = 25.26 * exp( -1.54 * log10(Count) ) + 0.09"
+
+
+test.rep1$Strata.sd <- predict(s1.fit, data.frame("Strata.count" = log10( test.rep1$hct116.T0.rep1 )))
+test.rep2$Strata.sd <- predict(s2.fit, data.frame("Strata.count" = log10( test.rep2$hct116.T0.rep2 )))
+k <- quantile(test.rep1$Strata.sd, 0.05)
+test.rep1$Strata.sd <- ifelse( test.rep1$Strata.sd < k, k, test.rep1$Strata.sd )
+k <- quantile(test.rep2$Strata.sd, 0.05)
+test.rep2$Strata.sd <- ifelse( test.rep2$Strata.sd < k, k, test.rep2$Strata.sd )
+
+s  <- test.rep1 %>% filter(V1 == "control")
+test.rep1 <- test.rep1 %>% mutate( hct116.T21.rep1.log2fc = hct116.T21.rep1.log2fc - sum( s$hct116.T21.rep1.log2fc * (1/(s$Strata.sd)^2) )/sum( 1/(s$Strata.sd)^2 ) )   ###minus control sgRNA
+s  <- test.rep2 %>% filter(V1 == "control")
+test.rep2 <- test.rep2 %>% mutate( hct116.T21.rep2.log2fc = hct116.T21.rep2.log2fc - sum( s$hct116.T21.rep2.log2fc * (1/(s$Strata.sd)^2) )/sum( 1/(s$Strata.sd)^2 ) )   ###minus control sgRNA
+test.rep1 <- test.rep1 %>% mutate(weight = 1/(Strata.sd * Strata.sd)) %>% mutate(weighted = hct116.T21.rep1.log2fc * weight)
+test.rep2 <- test.rep2 %>% mutate(weight = 1/(Strata.sd * Strata.sd)) %>% mutate(weighted = hct116.T21.rep2.log2fc * weight)
+
+p1 <-ggplot(test.rep1 %>% filter(V1 %in% c("negative", "gene", "control"))) + geom_point(aes(x=hct116.T0.rep1, y=hct116.T21.rep1.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_hline(yintercept=0, lty="dashed") + geom_line(aes(x=hct116.T0.rep1, y=0 - 1.64 * Strata.sd), data=unique(test.rep1 %>% select(hct116.T0.rep1, Strata.sd))) + facet_grid(~V1)
+p2 <-ggplot(test.rep2 %>% filter(V1 %in% c("negative", "gene", "control"))) + geom_point(aes(x=hct116.T0.rep2, y=hct116.T21.rep2.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_hline(yintercept=0, lty="dashed") + geom_line(aes(x=hct116.T0.rep1, y=0 - 1.64 * Strata.sd), data=unique(test.rep1 %>% select(hct116.T0.rep1, Strata.sd))) + facet_grid(~V1)
+grid.arrange(p1,p2, layout_matrix=matrix(1:2, nrow=2))
+
+
+###Some plots to show. 1. Replicates correlation; 2. ECDF plot; 3. Reverse; 4. Linear fitting
+hct116.sgRNA <- test.rep1[,c(1:6,15:18)] %>% inner_join( test.rep2[,c(1:6,15:18)], by=names(test)[1:6]) %>% mutate(hct116.T21.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y))
+hct116.sgRNA$V1 <- factor(hct116.sgRNA$V1, levels=c("gi1", "gi2", "choose", "essen", "gene", "negative", "control", "other","reverse"))
+
+p1 <- hct116.sgRNA %>% ggplot(aes(x = hct116.T21.rep1.log2fc, y = hct116.T21.rep2.log2fc)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Replicate_1 dependency score") + ylab("Replicate_2 dependency score") + xlim(c(-8, 3)) + ylim(c(-8, 3)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -6, "y" = 2, label = "R = 0.58")) 
+
+p2 <- hct116.sgRNA %>% filter(V1 != "other" & V1 != "reverse") %>% ggplot() + stat_ecdf(aes(x = hct116.T21.rep1.log2fc, col=V1), lwd=1) + xlab("Dependency score") + ylab("Cumulative probability") + theme_bw() + theme(axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17) , plot.tag = element_text(size=28, face="bold")) + scale_x_continuous(breaks=c(-6,-4,-2,0,2), labels=c(-6,-4,-2,0,2)) + scale_color_manual(values=colors, labels = c("Positive control GI pair set 1", "Positive control GI pair set 2", "Duplicate gene pair", "Single essential gene", "Single duplicate gene", "Single intergenic site", "Non-targeting" ), guide = guide_legend( title = "Category") )
+
+hct116.sgRNA.reverse <- hct116.sgRNA %>% select(V5, V6, hct116.T21.rep1.log2fc, hct116.T21.rep2.log2fc, hct116.T21.log2fc) %>% inner_join( hct116.sgRNA %>% filter(V1 == "reverse") %>% select(V5, V6, hct116.T21.rep1.log2fc, hct116.T21.rep2.log2fc, hct116.T21.log2fc), by=c("V6"="V5", "V5"="V6"))
+
+p3 <- hct116.sgRNA.reverse %>% ggplot(aes(x = hct116.T21.log2fc.x, y = hct116.T21.log2fc.y)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Depencency score") + ylab("Depencency score (reversed)") + xlim(c(-5, 2)) + ylim(c(-5, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -3.5, "y" = 1.4, label = "R = 0.56"))
+
+
+s <- test.rep1 %>% filter( V1 == "control") %>% arrange(hct116.T0.rep1)
+s$strata <- findInterval(s$hct116.T0.rep1, c(quantile(s$hct116.T0.rep1, c( 1:14/15 )) ))
+p4 <- s %>% ggplot() +geom_point(aes(x= hct116.T0.rep1, y=hct116.T21.rep1.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_vline(xintercept = quantile(s$hct116.T0.rep1, c( 1:14/15 )), lty="dashed") + geom_text( aes(x=Strata.count ,y=2, label=label), size=5.8, data = s1 %>% filter(Strata == 14) %>% mutate(label="(15 strata)"))+ theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.position = "none" , plot.tag = element_text(size=28, face="bold")) + xlab("Replicate_1 T0 count (non-targeting)") + ylab("Replicate_1 dependency score")
+
+p5 <- s1 %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("Replicate_1 T0 count (strata)") + ylab("SD of dependency score") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(1.7, 4.5, 0.1), "V2"=predict(s1.fit, data.frame("Strata.count"=seq(1.7, 4.5, 0.1)))), lty="dashed" ) + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000)) + theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position="none", plot.tag = element_text(size=28, face="bold")) + scale_color_discrete( labels = c("Rep1", "Rep2"), guide = guide_legend( title = "Replicates")) + geom_text(aes(x=x, y=y, label=label), data.frame( "x" = 3.4, "y" = 1, "label" = s1.fit.formula), size=5.8)
+
+grid.arrange(p1, p2, p3, p4, p5, layout_matrix = matrix(c(1,2,2,3,4,5), nrow=2, byrow=T))
+
+
+###For those reverse sgRNA pairs, we shall reverse again their names so as to add them to our gene level calculation. 
+test.rep1.reverse <- test.rep1 %>% filter(V1 == "reverse") %>% mutate(buffer = V3, V3 = V4, V4 = buffer, buffer = NULL) %>% mutate(buffer = V5, V5 = V6, V6 = buffer, buffer = NULL)
+test.rep1.reverse <- test.rep1.reverse %>% inner_join( test.rep1[, (1:4)] %>% filter(V1 != "reverse") %>% unique, by=c("V3", "V4") ) %>% mutate(V1.x = V1.y, V2.x = V2.y) %>% mutate(V1.y = NULL, V2.y = NULL)
+names(test.rep1.reverse)[1:2] <- names(test.rep1)[1:2]
+test.rep1 <- rbind.data.frame(test.rep1 %>% filter(V1 != "reverse"), test.rep1.reverse)
+
+test.rep2.reverse <- test.rep2 %>% filter(V1 == "reverse") %>% mutate(buffer = V3, V3 = V4, V4 = buffer, buffer = NULL) %>% mutate(buffer = V5, V5 = V6, V6 = buffer, buffer = NULL)
+test.rep2.reverse <- test.rep2.reverse %>% inner_join( test.rep2[, (1:4)] %>% filter(V1 != "reverse") %>% unique, by=c("V3", "V4") ) %>% mutate(V1.x = V1.y, V2.x = V2.y) %>% mutate(V1.y = NULL, V2.y = NULL)
+names(test.rep2.reverse)[1:2] <- names(test.rep2)[1:2]
+test.rep2 <- rbind.data.frame(test.rep2 %>% filter(V1 != "reverse"), test.rep2.reverse)
+
+
+###From sgRNA level to gene level, variance weighted mean is calculated. 
+test.rep1.gene <- aggregate(test.rep1 %>% select(weight, weighted), by=list(test.rep1$V1, test.rep1$V2, test.rep1$V3, test.rep1$V4), sum) %>% mutate(T21.rep1.log2fc = weighted/weight, sd=sqrt(1/weight))
+test.rep2.gene <- aggregate(test.rep2 %>% select(weight, weighted), by=list(test.rep2$V1, test.rep2$V2, test.rep2$V3, test.rep2$V4), sum) %>% mutate(T21.rep2.log2fc = weighted/weight, sd=sqrt(1/weight))
+names(test.rep1.gene)[1:4] <- names(test.rep1)[1:4]
+names(test.rep2.gene)[1:4] <- names(test.rep2)[1:4]
+
+hct116.gene <- test.rep1.gene %>% inner_join(test.rep2.gene, by=c("V1", "V2", "V3", "V4")) %>% mutate(hct116.T21.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y), sd = 1/sqrt(weight.x + weight.y))
+hct116.gene %>% select(T21.rep1.log2fc, T21.rep2.log2fc) %>% cor()
+hct116.gene %>% filter(V1 %in% c("essen")) %>% select(T21.rep1.log2fc, T21.rep2.log2fc) %>% cor()
+
+hct116.gene <- test.rep1.gene %>% inner_join(test.rep2.gene, by=c("V1", "V2", "V3", "V4")) %>% mutate(hct116.T21.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y)) %>% mutate(sd.mean = 1/sqrt(weight.x + weight.y), sd.max = ifelse(sd.x > sd.y, sd.x, sd.y), sd.diff = sqrt(1/weight.x + 1/weight.y)) %>% mutate(sd = ifelse( abs(T21.rep1.log2fc - T21.rep2.log2fc) < 1.96 * sd.diff , sd.mean, sd.max) ) %>% mutate(sd.mean = NULL, sd.max = NULL, sd.diff = NULL)   ###The sd for some gene is larger since the values from two biological replicates do not meet.
+
+
+###Ordinary Mean
+hct116.s1 <- s1
+hct116.s2 <- s2
+hct116.s1.fit <- s1.fit
+hct116.s2.fit <- s2.fit
+
+hct116.test.rep1 <- test.rep1
+hct116.test.rep2 <- test.rep2
+test.rep1.mean   <- aggregate(test.rep1$hct116.T21.rep1.log2fc, by=list(test.rep1$V1, test.rep1$V2, test.rep1$V3, test.rep1$V4), mean)
+test.rep2.mean   <- aggregate(test.rep2$hct116.T21.rep2.log2fc, by=list(test.rep2$V1, test.rep2$V2, test.rep2$V3, test.rep2$V4), mean)
+names(test.rep1.mean) <- c("V1", "V2", "V3", "V4", "T21.rep1.log2fc")
+names(test.rep2.mean) <- c("V1", "V2", "V3", "V4", "T21.rep2.log2fc")
+hct116.gene.mean <-  test.rep1.mean %>% inner_join(test.rep2.mean, by=names(test.rep1.mean)[1:4] ) %>% mutate( hct116.T21.log2fc = (T21.rep1.log2fc + T21.rep1.log2fc)/2)
+hct116.gene.mean %>% select(T21.rep1.log2fc, T21.rep2.log2fc) %>% cor()
+
+
+
+###GM12878. normalization and then calculate log2FC
+test <- read.table("../datafiles/GM12878.count.table", sep="\t")
+test.GM12878 <- test
+
+a <- sort(test$GM.T0.rep1, decreasing=T)[8710]
+b <- sort(test$GM.T0.rep2, decreasing=T)[8710]
+test.rep1 <- test[,c(1:6,7,9,11,13,15)]  %>% filter( GM.T0.rep1 >= a ) %>% filter(GM.T9.rep1 > 1 & GM.T15.rep1.1 > 1 & GM.T15.rep1.2 > 1 & GM.T15.rep1.3 > 1)
+test.rep2 <- test[,c(1:6,8,10,12,14,16)] %>% filter( GM.T0.rep2 >= b ) %>% filter(GM.T9.rep2 > 1 & GM.T15.rep2.1 > 1 & GM.T15.rep2.2 > 1 & GM.T15.rep2.3 > 1)
+dim(test.rep1)
+dim(test.rep2)
+
+mymean <- function(x){return( exp(mean(log(x))) )}
+s <- apply(test.rep1[,9:11],1,mymean)
+s <- c( median(test.rep1[,9]/s), median(test.rep1[,10]/s), median(test.rep1[,11]/s) )   ###Normalization read count among technical replicates. Like DESeq method
+test.rep1[,9:11] <- sweep(test.rep1[,9:11],2,s/min(s),'/')
+s <- apply(test.rep2[,9:11],1,mymean)
+s <- c( median(test.rep2[,9]/s), median(test.rep2[,10]/s), median(test.rep2[,11]/s) )
+test.rep2[,9:11] <- sweep(test.rep2[,9:11],2,s/min(s),'/')
+
+test.rep1 <- test.rep1 %>% mutate(GM.T9.rep1.log2fc = log2(GM.T9.rep1) - log2(GM.T0.rep1), GM.T15.rep1.log2fc = log2( (GM.T15.rep1.1 + GM.T15.rep1.2 + GM.T15.rep1.3)/3 ) - log2(GM.T0.rep1) )
+test.rep2 <- test.rep2 %>% mutate(GM.T9.rep2.log2fc = log2(GM.T9.rep2) - log2(GM.T0.rep2), GM.T15.rep2.log2fc = log2( (GM.T15.rep2.1 + GM.T15.rep2.2 + GM.T15.rep2.3)/3 ) - log2(GM.T0.rep2) )
+test.rep1 <- test.rep1 %>% arrange(GM.T0.rep1)
+test.rep2 <- test.rep2 %>% arrange(GM.T0.rep2)
+
+s1 <- CheckVar(test.rep1 %>% filter(V1 == "control"), "GM.T0.rep1", "GM.T15.rep1.log2fc", nstrata = 15)
+s2 <- CheckVar(test.rep2 %>% filter(V1 == "control"), "GM.T0.rep2", "GM.T15.rep2.log2fc", nstrata = 15)
+
+s1.fit <- nls(Strata.sd ~ (a - b)*exp(Strata.count * k) + b, data = s1 %>% mutate(Strata.count = log10(Strata.count)), start = list(a = max(s1$Strata.sd) * 2, b = min(s1$Strata.sd), k = -1 ) )
+s2.fit <- nls(Strata.sd ~ (a - b)*exp(Strata.count * k) + b, data = s2 %>% mutate(Strata.count = log10(Strata.count)), start = list(a = max(s1$Strata.sd) * 2, b = min(s1$Strata.sd), k = -1 ) )
+rbind.data.frame(s1, s2) %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("T0 count") + ylab("SD") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(1.7, 4.5, 0.1), "V2"=predict(s1.fit, data.frame("Strata.count"=seq(1.7, 4.5, 0.1)))), lty="dashed" ) + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(1.7, 4.5, 0.1), "V2"=predict(s2.fit, data.frame("Strata.count"=seq(1.7, 4.5, 0.1)))), lty="dashed" )  + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000))
+
+test.rep1$Strata.sd <- predict(s1.fit, data.frame("Strata.count" = log10( test.rep1$GM.T0.rep1 )))
+test.rep2$Strata.sd <- predict(s2.fit, data.frame("Strata.count" = log10( test.rep2$GM.T0.rep2 )))
+k <- quantile(test.rep1$Strata.sd, 0.05)
+test.rep1$Strata.sd <- ifelse( test.rep1$Strata.sd < k, k, test.rep1$Strata.sd )
+k <- quantile(test.rep2$Strata.sd, 0.05)
+test.rep2$Strata.sd <- ifelse( test.rep2$Strata.sd < k, k, test.rep2$Strata.sd )
+
+s  <- test.rep1 %>% filter(V1 == "control")
+test.rep1 <- test.rep1 %>% mutate( GM.T15.rep1.log2fc = GM.T15.rep1.log2fc - sum( s$GM.T15.rep1.log2fc * (1/(s$Strata.sd)^2) )/sum( 1/(s$Strata.sd)^2 ) )   ###minus control sgRNA
+s  <- test.rep2 %>% filter(V1 == "control")
+test.rep2 <- test.rep2 %>% mutate( GM.T15.rep2.log2fc = GM.T15.rep2.log2fc - sum( s$GM.T15.rep2.log2fc * (1/(s$Strata.sd)^2) )/sum( 1/(s$Strata.sd)^2 ) )   ###minus control sgRNA
+test.rep1 <- test.rep1 %>% mutate(weight = 1/(Strata.sd * Strata.sd)) %>% mutate(weighted = GM.T15.rep1.log2fc * weight)
+test.rep2 <- test.rep2 %>% mutate(weight = 1/(Strata.sd * Strata.sd)) %>% mutate(weighted = GM.T15.rep2.log2fc * weight)
+
+###Preparing some data in order to draw plots
+GM.sgRNA <- test.rep1[,c(1:6,13:16)] %>% inner_join( test.rep2[,c(1:6,13:16)], by=names(test)[1:6]) %>% mutate(GM.T15.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y))
+GM.sgRNA$V1 <- factor(GM.sgRNA$V1, levels=c("gi1", "gi2", "choose", "essen", "gene", "negative", "control", "other","reverse"))
+GM.sgRNA.reverse <- GM.sgRNA %>% select(V5, V6, GM.T15.rep1.log2fc, GM.T15.rep2.log2fc, GM.T15.log2fc) %>% inner_join( GM.sgRNA %>% filter(V1 == "reverse") %>% select(V5, V6, GM.T15.rep1.log2fc, GM.T15.rep2.log2fc, GM.T15.log2fc), by=c("V6"="V5", "V5"="V6"))
+
+
+###For those reverse sgRNA pairs, we shall reverse again their names so as to add them to our gene level calculation. 
+test.rep1.reverse <- test.rep1 %>% filter(V1 == "reverse") %>% mutate(buffer = V3, V3 = V4, V4 = buffer, buffer = NULL) %>% mutate(buffer = V5, V5 = V6, V6 = buffer, buffer = NULL)
+test.rep1.reverse <- test.rep1.reverse %>% inner_join( test.rep1[, (1:4)] %>% filter(V1 != "reverse") %>% unique, by=c("V3", "V4") ) %>% mutate(V1.x = V1.y, V2.x = V2.y) %>% mutate(V1.y = NULL, V2.y = NULL)
+names(test.rep1.reverse)[1:2] <- names(test.rep1)[1:2]
+test.rep1 <- rbind.data.frame(test.rep1 %>% filter(V1 != "reverse"), test.rep1.reverse)
+
+test.rep2.reverse <- test.rep2 %>% filter(V1 == "reverse") %>% mutate(buffer = V3, V3 = V4, V4 = buffer, buffer = NULL) %>% mutate(buffer = V5, V5 = V6, V6 = buffer, buffer = NULL)
+test.rep2.reverse <- test.rep2.reverse %>% inner_join( test.rep2[, (1:4)] %>% filter(V1 != "reverse") %>% unique, by=c("V3", "V4") ) %>% mutate(V1.x = V1.y, V2.x = V2.y) %>% mutate(V1.y = NULL, V2.y = NULL)
+names(test.rep2.reverse)[1:2] <- names(test.rep2)[1:2]
+test.rep2 <- rbind.data.frame(test.rep2 %>% filter(V1 != "reverse"), test.rep2.reverse)
+
+
+###From sgRNA level to gene level, variance weighted mean is calculated. 
+test.rep1.gene <- aggregate(test.rep1 %>% select(weight, weighted), by=list(test.rep1$V1, test.rep1$V2, test.rep1$V3, test.rep1$V4), sum) %>% mutate(T15.rep1.log2fc = weighted/weight, sd=sqrt(1/weight))
+test.rep2.gene <- aggregate(test.rep2 %>% select(weight, weighted), by=list(test.rep2$V1, test.rep2$V2, test.rep2$V3, test.rep2$V4), sum) %>% mutate(T15.rep2.log2fc = weighted/weight, sd=sqrt(1/weight))
+names(test.rep1.gene)[1:4] <- names(test.rep1)[1:4]
+names(test.rep2.gene)[1:4] <- names(test.rep2)[1:4]
+
+GM.gene <- test.rep1.gene %>% inner_join(test.rep2.gene, by=c("V1", "V2", "V3", "V4")) %>% mutate(GM.T15.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y), sd = 1/sqrt(weight.x + weight.y))
+GM.gene %>% select(T15.rep1.log2fc, T15.rep2.log2fc) %>% cor()
+GM.gene %>% filter(V1 %in% c("essen")) %>% select(T15.rep1.log2fc, T15.rep2.log2fc) %>% cor()
+
+ggplot(test.rep1 %>% filter(V1 %in% c("negative", "gene", "control"))) + geom_point(aes(x=GM.T0.rep1, y=GM.T15.rep1.log2fc, col=V1)) + scale_x_log10() + geom_hline(yintercept=0, lty="dashed") + geom_line(aes(x=GM.T0.rep1, y=0 - 1.64 * Strata.sd), data=unique(test.rep1 %>% select(GM.T0.rep1, Strata.sd))) + facet_grid(~V1)
+ggplot(test.rep2 %>% filter(V1 %in% c("negative", "gene", "control"))) + geom_point(aes(x=GM.T0.rep2, y=GM.T15.rep2.log2fc, col=V1)) + scale_x_log10() + geom_hline(yintercept=0, lty="dashed") + geom_line(aes(x=GM.T0.rep1, y=0 - 1.64 * Strata.sd), data=unique(test.rep1 %>% select(GM.T0.rep1, Strata.sd))) + facet_grid(~V1)
+
+GM.gene <- test.rep1.gene %>% inner_join(test.rep2.gene, by=c("V1", "V2", "V3", "V4")) %>% mutate(GM.T15.log2fc = (weighted.x + weighted.y)/(weight.x + weight.y)) %>% mutate(sd.mean = 1/sqrt(weight.x + weight.y), sd.max = ifelse(sd.x > sd.y, sd.x, sd.y), sd.diff = sqrt(1/weight.x + 1/weight.y)) %>% mutate(sd = ifelse( abs(T15.rep1.log2fc - T15.rep2.log2fc) < 1.96 * sd.diff , sd.mean, sd.max) ) %>% mutate(sd.mean = NULL, sd.max = NULL, sd.diff = NULL)   ###The sd for some gene is larger since the values from two biological replicates do not meet.
+
+
+###Ordinary Mean
+GM.s1 <- s1
+GM.s2 <- s2
+GM.s1.fit <- s1.fit
+GM.s2.fit <- s2.fit
+
+GM.test.rep1    <- test.rep1
+GM.test.rep2    <- test.rep2
+test.rep1.mean  <- aggregate(test.rep1$GM.T15.rep1.log2fc, by=list(test.rep1$V1, test.rep1$V2, test.rep1$V3, test.rep1$V4), mean)
+test.rep2.mean  <- aggregate(test.rep2$GM.T15.rep2.log2fc, by=list(test.rep2$V1, test.rep2$V2, test.rep2$V3, test.rep2$V4), mean)
+names(test.rep1.mean) <- c("V1", "V2", "V3", "V4", "T15.rep1.log2fc")
+names(test.rep2.mean) <- c("V1", "V2", "V3", "V4", "T15.rep2.log2fc")
+GM.gene.mean <-  test.rep1.mean %>% inner_join(test.rep2.mean, by=names(test.rep1.mean)[1:4] ) %>% mutate( GM.T15.log2fc = (T15.rep1.log2fc + T15.rep2.log2fc)/2 )
+GM.gene.mean %>% select(T15.rep1.log2fc, T15.rep2.log2fc) %>% cor()
+
+
+###Part 5. Comparing current result with that of Sanger data.
+sanger <- read.table("../datafiles/hct116.sanger.log2FC", header = T)
+
+genename <- read.table("../datafiles/Homo_sapiens.GRCh37.73.genename")
+names(genename) <- c("gene", "genename")
+
+comparison.final.gene <- hct116.gene %>% select(V1, V2, V3, V4, hct116.T21.log2fc) %>% inner_join(hct116.gene.mean %>% select(V1, V2, V3, V4, hct116.T21.log2fc), by = names(hct116.gene)[1:4] ) %>% filter(V1 %in% c("gene", "essen")) %>% inner_join(genename, c("V3" = "gene")) %>% inner_join(sanger, by=c("genename"))
+
+
+
+###Part 6. Aggregating so many plots into one large figure
+benchmark <- data.frame("Type" = rep(c("sgRNA", "Mean", "DESeq2", "Weighted"), 2), "CellLine" = rep(c("HCT116", "GM12878"), c(4,4)), "Correlation" = c(0.58, 0.80, 0.85, 0.87, 0.51, 0.71, 0.75, 0.80))
+benchmark$Type <- factor(benchmark$Type, levels = c("sgRNA", "Mean", "DESeq2", "Weighted"))
+benchmark$CellLine <- factor(benchmark$CellLine, levels = c("HCT116", "GM12878"))
+
+p7 <- benchmark %>% ggplot() + geom_bar(aes(x=Type, y=Correlation, fill=Type), stat="identity", alpha=0.9) + facet_grid(~CellLine) + theme_bw() + ylim(c(0, 1)) + theme(axis.title=element_text(size=20,face="bold"), axis.text.y=element_text(size=17), axis.text.x=element_text(size=15), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position = "none", strip.background = element_rect(fill = NA), strip.text=element_text(size=20) , plot.tag = element_text(size=28, face="bold")) + scale_fill_viridis_d(guide = guide_legend( title = "Class") ) + xlab("Method") + ylab("Between-replicate \ncorrelation") + geom_text(aes(x=Type, y=Correlation + 0.04, label=Correlation), data = benchmark, size=5.8) 
+p7.hct116 <- ggplot(benchmark %>% filter(CellLine == "HCT116")) + geom_bar(aes(x=Type, y=Correlation, fill=Type), stat="identity", alpha=0.9) + theme_bw() + ylim(c(0, 1)) + theme(axis.title=element_text(size=20,face="bold"), axis.text.y=element_text(size=17), axis.text.x=element_text(size=15), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position = "none", strip.background = element_rect(fill = NA), strip.text=element_text(size=20) , plot.tag = element_text(size=28, face="bold")) + scale_fill_viridis_d(guide = guide_legend( title = "Class") ) + xlab("Method") + ylab("Between replicates correlation") + geom_text(aes(x=Type, y=Correlation + 0.04, label=Correlation), data = benchmark %>% filter(CellLine == "HCT116"), size=5.8)
+p7.GM12878 <- ggplot(benchmark %>% filter(CellLine == "GM12878")) + geom_bar(aes(x=Type, y=Correlation, fill=Type), stat="identity", alpha=0.9) + theme_bw() + ylim(c(0, 1)) + theme(axis.title=element_text(size=20,face="bold"), axis.text.y=element_text(size=17), axis.text.x=element_text(size=15), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position = "none", strip.background = element_rect(fill = NA), strip.text=element_text(size=20) , plot.tag = element_text(size=28, face="bold")) + scale_fill_viridis_d(guide = guide_legend( title = "Class") ) + xlab("Method") + ylab("Between replicates correlation") + geom_text(aes(x=Type, y=Correlation + 0.04, label=Correlation), data = benchmark %>% filter(CellLine == "GM12878"), size=5.8) + ggtitle("GM12878 data")
+
+
+#pdf("HCT116.strata.pdf", width=16, height=16)
+#grid.arrange(p1 + labs(tag = "A"), p2 + labs(tag = "B"), p3 + labs(tag = "C"), p4 + labs(tag = "D"), p5 + labs(tag = "E"), p7 + labs(tag = "F"), p6 + labs(tag = "G"), layout_matrix = matrix(c(1,2,2,3,4,5,6,6,7), nrow=3, byrow=T))
+#dev.off()
+
+#pdf("../HCT116.Figure1.pdf", width=16.5, height=11)
+#grid.arrange(p2  + labs(tag = "C"), p4 + labs(tag = "D"), p5 + labs(tag = "E"), p7.hct116 + labs(tag = "F"), p6 + labs(tag = "G"), layout_matrix = matrix(c(1,1,2,5,6,7), nrow=2, byrow=T))
+#dev.off()
+
+
+
+###Part9. HCT116 and GM12878 data quality assessment supplementary data
+new.p1 <- GM.sgRNA %>% ggplot(aes(x = GM.T15.rep1.log2fc, y = GM.T15.rep2.log2fc)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("sgRNA level dependency score of Replicate_1") + ylab("sgRNA level dependency score of Replicate_2") + xlim(c(-8, 3)) + ylim(c(-8, 3)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -6, "y" = 2, label = "R = 0.51"))
+
+new.p2 <- GM.sgRNA %>% filter(V1 != "other" & V1 != "reverse") %>% ggplot() + stat_ecdf(aes(x = GM.T15.rep1.log2fc, col=V1), lwd=1) + xlab("Dependency score") + ylab("Cumulative probability") + theme_bw() + theme(axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17) , plot.tag = element_text(size=28, face="bold")) + scale_x_continuous(breaks=c(-6,-4,-2,0,2), labels=c(-6,-4,-2,0,2)) + scale_color_manual(values=colors, labels = c("Positive control GI pair set 1", "Positive control GI pair set 2", "Duplicate gene pair", "Single essential gene", "Single duplicate gene", "Single intergenic site", "Non-targeting" ), guide = guide_legend( title = "Category") )
+
+GM.sgRNA.reverse <- GM.sgRNA %>% select(V5, V6, GM.T15.rep1.log2fc, GM.T15.rep2.log2fc, GM.T15.log2fc) %>% inner_join( GM.sgRNA %>% filter(V1 == "reverse") %>% select(V5, V6, GM.T15.rep1.log2fc, GM.T15.rep2.log2fc, GM.T15.log2fc), by=c("V6"="V5", "V5"="V6"))
+
+new.p3 <- GM.sgRNA.reverse %>% ggplot(aes(x = GM.T15.log2fc.x, y = GM.T15.log2fc.y)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Dependency score") + ylab("Dependency score (reversed)") + xlim(c(-5, 2)) + ylim(c(-5, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -3.5, "y" = 1.4, label = "R = 0.47"))
+
+s <- GM.test.rep1 %>% filter( V1 == "control") %>% arrange(GM.T0.rep1)
+s$strata <- findInterval(s$GM.T0.rep1, c(quantile(s$GM.T0.rep1, c( 1:14/15 )) ))
+new.p4 <- s %>% ggplot() +geom_point(aes(x= GM.T0.rep1, y=GM.T15.rep1.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_vline(xintercept = quantile(s$GM.T0.rep1, c( 1:14/15 )), lty="dashed") + geom_text( aes(x=Strata.count ,y=2, label=label), size=5.8, data = GM.s1 %>% filter(Strata == 14) %>% mutate(label="(15 strata)"))+ theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.position = "none" , plot.tag = element_text(size=28, face="bold")) + xlab("Replicate_1 T0 count (non=targeting)") + ylab("Replicate_1 dependency score")
+
+new.p5 <- GM.s1 %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("Replicate_1 T0 count (strata)") + ylab("SD of Dependency score") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(2, 4.5, 0.1), "V2"=predict(GM.s1.fit, data.frame("Strata.count"=seq(2, 4.5, 0.1)))), lty="dashed" ) + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000)) + theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position="none", plot.tag = element_text(size=28, face="bold")) + scale_color_discrete( guide = guide_legend( title = "Replicates"))
+
+s <- GM.test.rep2 %>% filter( V1 == "control") %>% arrange(GM.T0.rep2)
+s$strata <- findInterval(s$GM.T0.rep2, c(quantile(s$GM.T0.rep2, c( 1:14/15 )) ))
+new.p6 <- s %>% ggplot() +geom_point(aes(x= GM.T0.rep2, y=GM.T15.rep2.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_vline(xintercept = quantile(s$GM.T0.rep2, c( 1:14/15 )), lty="dashed") + geom_text( aes(x=Strata.count ,y=2, label=label), size=5.8, data = GM.s2 %>% filter(Strata == 14) %>% mutate(label="(15 strata)"))+ theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.position = "none" , plot.tag = element_text(size=28, face="bold")) + xlab("Replicate_2 T0 count (non-targeting)") + ylab("Replicate_2 dependency score")
+
+new.p7 <- GM.s2 %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("Replicate_2 T0 count (strata)") + ylab("SD of Dependency score") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(2, 4.5, 0.1), "V2"=predict(GM.s2.fit, data.frame("Strata.count"=seq(2, 4.5, 0.1)))), lty="dashed" ) + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000)) + theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position="none", plot.tag = element_text(size=28, face="bold")) + scale_color_discrete( guide = guide_legend( title = "Replicates"))
+
+new.p8 <- GM.gene %>% ggplot(aes(x = T15.rep1.log2fc, y = T15.rep2.log2fc)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Replicate_1 dependency score (gene)") + ylab("Replicate_2 dependency score (gene)") + xlim(c(-6.5, 2)) + ylim(c(-6.5, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -5, "y" = 1, label = "R = 0.80"))
+
+
+###HCT116 replicate_2
+s <- hct116.test.rep2 %>% filter( V1 == "control") %>% arrange(hct116.T0.rep2)
+s$strata <- findInterval(s$hct116.T0.rep2, c(quantile(s$hct116.T0.rep2, c( 1:14/15 )) ))
+new.p9 <- s %>% ggplot() +geom_point(aes(x= hct116.T0.rep2, y=hct116.T21.rep2.log2fc, col=V1)) + scale_x_log10() + theme_bw() + geom_vline(xintercept = quantile(s$hct116.T0.rep2, c( 1:14/15 )), lty="dashed") + geom_text( aes(x=Strata.count ,y=2, label=label), size=5.8, data = s1 %>% filter(Strata == 14) %>% mutate(label="(15 strata)"))+ theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.position = "none" , plot.tag = element_text(size=28, face="bold")) + xlab("Replicate_2 T0 count (non-targeting)") + ylab("Replicate_2 dependency score")
+
+new.p10 <- hct116.s2 %>% ggplot() + geom_point(aes(x=log10(Strata.count), y=Strata.sd, col=Data) ) + theme_bw() + xlab("Replicate_2 T0 count (strata)") + ylab("SD of Dependency score") + geom_line(aes(x=V1, y=V2), data = data.frame("V1"=seq(2, 4.5, 0.1), "V2"=predict(hct116.s2.fit, data.frame("Strata.count"=seq(2, 4.5, 0.1)))), lty="dashed" ) + scale_x_continuous(breaks=c(2,3,4), labels = c(100,1000,10000)) + theme( axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17), legend.position="none", plot.tag = element_text(size=28, face="bold")) + scale_color_discrete( guide = guide_legend( title = "Replicates")) + geom_text(aes(x=x, y=y, label=label), data.frame( "x" = 3.4, "y" = 1.2, "label" = s2.fit.formula), size=5.8)
+
+new.p11 <- hct116.gene %>% ggplot(aes(x = T21.rep1.log2fc, y = T21.rep2.log2fc)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Replicate_1 dependency score (gene)") + ylab("Replicate_2 dependency score (gene)") + xlim(c(-6, 2)) + ylim(c(-6, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = -5, "y" = 1, label = "R = 0.87"))
+
+
+
+###GI calculation
+genename <- read.table("../datafiles/Homo_sapiens.GRCh37.73.genename", stringsAsFactors = F)
+names(genename) <- c("gene", "genename")
+
+hct116.gene.gi <- subset(hct116.gene,hct116.gene[,1] == "choose" | hct116.gene[,1] == "gi1" | hct116.gene[,1] == "gi2")[,c(1:4,13:14)] %>% inner_join(subset(hct116.gene,hct116.gene[,2] == "single")[,c(3,13:14)],by=c("V3"="V3")) %>% inner_join(subset(hct116.gene,hct116.gene[,2] == "single")[,c(3,13:14)],by=c("V4"="V3")) %>% mutate(  hct116.T21.gi =  hct116.T21.log2fc.x - (hct116.T21.log2fc.y + hct116.T21.log2fc) )
+
+hct116.gene.gi <- hct116.gene.gi %>% mutate( hct116.T21.gi.sd = sqrt(sd.x^2 + sd.y^2 + sd^2) ) %>% mutate(p.value =  pnorm( hct116.T21.gi, mean = 0, sd = hct116.T21.gi.sd)) %>% arrange(hct116.T21.gi)
+hct116.gene.gi$qvalue <- p.adjust( hct116.gene.gi$p.value, "fdr" )
+hct116.gene.gi <- hct116.gene.gi %>% mutate(significant = ifelse(qvalue < 0.05, "Y", "N"))
+
+GM.gene.gi <- subset(GM.gene,GM.gene[,1] == "choose" | GM.gene[,1] == "gi1" | GM.gene[,1] == "gi2")[,c(1:4,13:14)] %>% inner_join(subset(GM.gene,GM.gene[,2] == "single")[,c(3,13:14)],by=c("V3"="V3")) %>% inner_join(subset(GM.gene,GM.gene[,2] == "single")[,c(3,13:14)],by=c("V4"="V3")) %>% mutate(  GM.T15.gi =  GM.T15.log2fc.x - (GM.T15.log2fc.y + GM.T15.log2fc) )
+
+GM.gene.gi <- GM.gene.gi %>% mutate( GM.T15.gi.sd = sqrt(sd.x^2 + sd.y^2 + sd^2) ) %>% mutate(p.value =  pnorm( GM.T15.gi, mean = 0, sd = GM.T15.gi.sd)) %>% arrange(GM.T15.gi)
+GM.gene.gi$qvalue <- p.adjust( GM.gene.gi$p.value, "fdr" )
+GM.gene.gi <- GM.gene.gi %>% mutate(significant = ifelse(qvalue < 0.05, "Y", "N"))
+
+hct116.gene.gi <- hct116.gene.gi %>% inner_join(genename, by=c("V3" = "gene")) %>% inner_join(genename, by=c("V4" = "gene"))
+GM.gene.gi     <- GM.gene.gi     %>% inner_join(genename, by=c("V3" = "gene")) %>% inner_join(genename, by=c("V4" = "gene"))
+
+compare.gi     <- hct116.gene.gi %>% select(V1,V2,V3,V4, hct116.T21.gi, hct116.T21.gi.sd, qvalue, significant) %>% inner_join( GM.gene.gi %>% select(V1,V2,V3,V4, GM.T15.gi, GM.T15.gi.sd, qvalue, significant), by=names(hct116.gene.gi)[1:4] ) %>% inner_join(genename, by=c("V3" = "gene")) %>% inner_join(genename, by=c("V4" = "gene"))
+compare.gi       <- compare.gi %>% mutate(gi = ifelse(significant.x == "Y" | significant.y == "Y", "negative GI", "others")) %>% arrange( qvalue.x +  qvalue.y )
+#write.csv(compare.gi, "../Compare.gi.20200912novel.csv")
+
+
+
+###Part8. Some plot to describe GI identification results
+hct116.gene.gi[,1] <- factor(hct116.gene.gi[,1], levels=c("gi1","gi2","choose"))
+p1.gi <- ggplot(hct116.gene.gi) + geom_histogram(aes(x=hct116.T21.gi,fill=V1,alpha=I(0.7)),binwidth=0.1) +  theme_bw() + xlab("HCT116 GI score") + ylab("Count") + theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=21),legend.text=element_text(size=17),legend.position=c(0.25, 0.8)) + geom_vline(xintercept = 0.051, lty="dashed") + scale_fill_manual(values=c("#F8766D", "#2600DF", "#C49A00"), labels = c("Positive control GI pair set 1", "Positive control GI pair set 2", "Duplicate gene pair", "Single essential gene", "Single duplicate gene", "Single intergenic site", "Non-targeting" ), guide = guide_legend( title = "Category") ) 
+
+GM.gene.gi[,1] <- factor(GM.gene.gi[,1], levels=c("gi1","gi2","choose"))
+p2.gi <- ggplot(GM.gene.gi) + geom_histogram(aes(x=GM.T15.gi,fill=V1,alpha=I(0.7)),binwidth=0.1) + theme_bw() + xlab("GM12878 GI score") + ylab("Count") + theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=21),legend.text=element_text(size=17), legend.position = "none") + geom_vline(xintercept = 0.01, lty="dashed") + scale_fill_manual(values=c("#F8766D", "#2600DF", "#C49A00"), labels = c("Positive control GI pair set 1", "Positive control GI pair set 2", "Duplicate gene pair", "Single essential gene", "Single duplicate gene", "Single intergenic site", "Non-targeting" ), guide = guide_legend( title = "Category") ) 
+
+hct116.gene.gi[,1] <- factor(hct116.gene.gi[,1], levels=c("choose","gi2","gi1"))
+p3.gi <- hct116.gene.gi %>% filter(significant == "Y") %>% ggplot(aes(x=factor(1), fill=V1, alpha=I(0.8))) + geom_bar() + scale_y_continuous(breaks=c(4,7,21),labels=c(6,2,23)) + coord_polar("y") + theme_bw()  + theme(axis.text.y = element_blank(), axis.ticks = element_blank(), axis.text.x = element_text(size=17), axis.title=element_text(size=20, face="bold"), plot.title=element_text(size=20,face="bold"), legend.text=element_text(size=17), legend.title=element_text(size=20,face="bold"), legend.position="bottom") + ylab("Negative GI pair") + xlab("Count") + scale_fill_manual(values=c("#C49A00", "#2600DF", "#F8766D")) + ggtitle("In HCT116")
+
+GM.gene.gi[,1] <- factor(GM.gene.gi[,1], levels=c("choose","gi2","gi1"))
+p4.gi <- GM.gene.gi %>% filter(significant == "Y") %>% ggplot(aes(x=factor(1), fill=V1, alpha=I(0.8))) + geom_bar() + scale_y_continuous(breaks=c(1,3.5,25),labels=c(2,3,31)) + coord_polar("y") + theme_bw()  + theme(axis.text.y = element_blank(), axis.ticks =  element_blank(), axis.text.x = element_text(size=17), axis.title=element_text(size=20, face="bold"), plot.title=element_text(size=20,face="bold"), legend.text=element_text(size=17), legend.title=element_text(size=20,face="bold"), legend.position="bottom") + ylab("Negative GI pair") + xlab("Count") + scale_fill_manual(values=c("#C49A00", "#2600DF", "#F8766D")) + ggtitle("In GM12878")
+
+p5.gi <- compare.gi %>% ggplot(aes(hct116.T21.gi, GM.T15.gi)) + geom_point(size=1, col="gray50") + geom_abline(slope=1, intercept=0) + geom_density2d(col="gray50") + theme_bw() + theme(axis.text = element_text(size=17), axis.title=element_text(size=20, face="bold"), legend.text=element_text(size=17), legend.title=element_text(size=20,face="bold")) + ylab("GM12878 GI score") + xlab("HCT116 GI score") + geom_text(aes(x = x, y = y, label = label), data = data.frame("x"=-3, "y"=1, "label"="R = 0.37"), size=5.8)
+
+
+
+###A heatmap with GI scores comparison.
+k1 <- compare.gi %>% filter(significant.x == "Y", significant.y == "Y") %>% mutate( pair = paste(genename.x, genename.y, sep=".") ) %>% arrange( hct116.T21.gi + GM.T15.gi ) %>% select(V1, pair, hct116.T21.gi, GM.T15.gi)
+k2 <- compare.gi %>% filter(significant.x == "Y", significant.y != "Y") %>% mutate( pair = paste(genename.x, genename.y, sep=".") ) %>% arrange( hct116.T21.gi ) %>% select(V1, pair, hct116.T21.gi, GM.T15.gi)
+k3 <- compare.gi %>% filter(significant.x != "Y", significant.y == "Y") %>% mutate( pair = paste(genename.x, genename.y, sep=".") ) %>% arrange(  GM.T15.gi ) %>% select(V1, pair, hct116.T21.gi, GM.T15.gi)
+k  <- rbind.data.frame(k1, k2, k3)
+k$order <- nrow(k):1
+k <- melt(k, id.vars=c("V1", "pair", "order"))
+k$variable <- sub("hct","ACT",k$variable)
+k$V1 <- factor(k$V1, levels = c("gi1", "gi2", "choose"))
+
+p.gi.heatmap <- k %>% rename( `GI score` = value) %>% ggplot() + geom_tile(aes(x=variable,y=order,fill=`GI score`)) + scale_fill_gradient2(low="#320084",high="#FDE725",midpoint=0,space="Lab") + geom_text(aes(x=factor(0),y=order,label=pair,col=V1), size=5.8, data=( k %>% filter(variable == "GM.T15.gi") ) ) + theme_bw() + scale_color_manual(values=c("tomato", "royalblue", "black"), labels= c("Positive control\nGI pair set 1", "Positive control\nGI pair set 2", "Duplicate gene\npair" ), guide = guide_legend( title = "Category")) + theme(axis.title = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size=17), axis.ticks.x = element_line(size=1), legend.text=element_text(size=17), legend.title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold")) + scale_x_discrete(labels=c("", "HCT116", "GM12878"))
+
+
+
+###Two cell lines combined
+two.cell.correlation <- rbind.data.frame( hct116.gene %>% select( T21.rep1.log2fc, T21.rep2.log2fc ) %>% rename( rep1.log2fc = T21.rep1.log2fc, rep2.log2fc = T21.rep2.log2fc) %>% mutate( cell = "HCT116" ), GM.gene %>% select( T15.rep1.log2fc, T15.rep2.log2fc ) %>% rename( rep1.log2fc = T15.rep1.log2fc, rep2.log2fc = T15.rep2.log2fc) %>% mutate( cell = "GM12878" ) )
+two.cell.correlation$cell <- factor( two.cell.correlation$cell, levels=c("HCT116", "GM12878") )
+
+p.correlation <-  two.cell.correlation %>% ggplot(aes(x = rep1.log2fc, y = rep2.log2fc)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Gene level dependency score of Replicate_1") + ylab("Gene level dependency score\n of Replicate_2") + xlim(c(-7, 2)) + ylim(c(-7, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold"), strip.background = element_rect(fill = NA), strip.text=element_text(size=20) ) + facet_grid(~cell)+ geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = c(-5, -5), "y" = c(1, 1) , label = c( "R = 0.87", "R = 0.80"), cell=c("HCT116", "GM12878") ) )
+
+
+two.cell.dependency  <- rbind.data.frame( hct116.gene %>% select( V1, V2, V3, V4, hct116.T21.log2fc ) %>% rename( log2fc = hct116.T21.log2fc ) %>% mutate(cell = "HCT116"), GM.gene %>% select( V1, V2, V3, V4, GM.T15.log2fc ) %>% rename( log2fc = GM.T15.log2fc ) %>% mutate(cell = "GM12878") )
+two.cell.dependency$cell <- factor( two.cell.dependency$cell, levels=c("HCT116", "GM12878") )
+
+p.dependency <-  two.cell.dependency %>% filter( V1 %in% c("essen", "gene")) %>% ggplot() + stat_ecdf(aes(x = log2fc, col=V1), lwd=1) + xlab("Dependency score") + ylab("Cumulative probability") + theme_bw() + theme(axis.title=element_text(size=20,face="bold"), axis.text=element_text(size=17), title=element_text(face="bold",size=20), legend.text=element_text(size=17) , plot.tag = element_text(size=28, face="bold"), strip.background = element_rect(fill = NA), strip.text=element_text(size=20)) + scale_x_continuous(breaks=c(-6,-4,-2,0,2), labels=c(-6,-4,-2,0,2)) + scale_color_discrete(labels = c("Essential gene", "Duplicate gene" ), guide = guide_legend( title = "Category") ) + facet_grid(~cell)
+
+
+two.cell.reversed    <- rbind.data.frame( hct116.sgRNA.reverse %>% select( hct116.T21.log2fc.x, hct116.T21.log2fc.y ) %>% rename( log2fc.x = hct116.T21.log2fc.x, log2fc.y = hct116.T21.log2fc.y ) %>% mutate( cell = "HCT116"), GM.sgRNA.reverse %>% select( GM.T15.log2fc.x, GM.T15.log2fc.y ) %>% rename( log2fc.x = GM.T15.log2fc.x, log2fc.y = GM.T15.log2fc.y ) %>% mutate( cell = "GM12878") ) 
+two.cell.reversed$cell <- factor( two.cell.reversed$cell, levels=c("HCT116", "GM12878") )
+
+p.reversed  <-  two.cell.reversed  %>% ggplot(aes(x = log2fc.x, y = log2fc.y)) + geom_point( size=1 ) + geom_abline(slope=1, intercept=0) + geom_density2d() + xlab("Dependency score") + ylab("Position reversed") + xlim(c(-5, 2)) + ylim(c(-5, 2)) + theme_bw() +  theme(axis.title.x=element_text(face="bold",size=20),axis.title.y=element_text(face="bold",size=20),axis.text=element_text(size=17),title=element_text(face="bold",size=20), plot.tag = element_text(size=28, face="bold"), strip.background = element_rect(fill = NA), strip.text=element_text(size=20)) + geom_text(aes(x=x, y=y, label=label), size=5.8, data = data.frame("x" = c(-3.5, -3.5), "y" = c(1.4, 1.4), label = c("R = 0.56", "R = 0.47"), "cell"= c("HCT116", "GM12878")) ) + facet_grid(~cell)
+
+
+
+### A comparison of our results with GEMINI results
+compare.gi    <- read.csv("../datafiles/Compare.gi.20200912novel.csv", header=T, row.names=1)
+compare.gi    <- compare.gi %>% filter(V1 == "choose") %>% rename(gene1 = genename.x, gene2 = genename.y)
+compare.gi    <- compare.gi %>% mutate(gi = ifelse(gi == "negative GI", "Negative", "others"))
+
+gemini <- read.csv("../datafiles/GEMINI.results.csv")
+gemini <- gemini  %>% select(gene1, gene2, hct116.T21.gi.GEMINI, GM.T15.gi.GEMINI, hct116.significant.GEMINI, GM12878.significant.GEMINI) %>% mutate( gi.GEMINI = ifelse( hct116.significant.GEMINI == "Y" | GM12878.significant.GEMINI == "Y" , "Negative", "others") )
+
+compare.gi.gemini <- compare.gi %>% inner_join( gemini, by=c("gene1" = "gene1", "gene2" = "gene2"))
+compare.gi.gemini.scores <- rbind.data.frame( compare.gi.gemini %>% select(gene1, gene2, hct116.T21.gi, hct116.T21.gi.GEMINI) %>% rename(Weighted = hct116.T21.gi, GEMINI = hct116.T21.gi.GEMINI) %>% mutate( "CellLine" = "HCT116" ), compare.gi.gemini %>% select(gene1, gene2, GM.T15.gi, GM.T15.gi.GEMINI) %>% rename(Weighted = GM.T15.gi, GEMINI = GM.T15.gi.GEMINI) %>% mutate( "CellLine" = "GM12878" ) )
+compare.gi.gemini.scores$CellLine <- factor(compare.gi.gemini.scores$CellLine, levels=c("HCT116", "GM12878"))
+
+p.gemini <- compare.gi.gemini.scores %>% ggplot( aes(x = Weighted, y = -GEMINI)) + geom_point(aes(alpha=I(0.7) ), size=1) + geom_density2d() + theme_bw() + xlab("GI score (variance weighted method)") + ylab("GEMINI GI score") + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), legend.position = "none" ) + geom_text( aes(x=x,y=y,label=label), data = data.frame(x=c(-2.5, -2.5), y=c(2, 2), label=c("R = 0.48", "R = 0.64"), CellLine=c("HCT116", "GM12878")), size=5.8) + scale_color_discrete( guide = guide_legend(title = "Human cell lines") ) + geom_abline(slope=1, intercept=0) + facet_grid(~CellLine)
+
+
+pdf("../FigureS1_HCT116.strata.supplementary1.pdf", width=22, height=25)
+layout_matrix <- matrix(c(1,1,2,2,1,1,3,3,1,1,4,4,5,5,6,6,7,7,8,8), nrow=5, byrow=T) 
+p0 <- ggplot() + theme_minimal()
+grid.arrange( p0, p.correlation + labs(tag = "B"), p7 + labs(tag = "C"), p0, p.dependency + labs(tag = "E"), p.reversed + labs(tag = "F"), p0, p.gemini + labs(tag = "H"), layout_matrix = layout_matrix)
+dev.off()
+
+
+
+pdf("../Figure1_HCT116.strata_2021Oct.pdf", width=11, height=16.5)
+grid.arrange(p.gi.heatmap + labs(tag="E"), p4 + labs(tag="C"), p5 + labs(tag="D"), layout_matrix = matrix(c(1,1,1,2,3,4), nrow=3, byrow=F) )
+dev.off()
+
+
+
+####Saving data. Note, re-run the whole scripts except that reversed sgRNA are not processed.
+sgRNA_data_final <- test.hct116 %>% inner_join( test.GM12878, by=c("V1", "V2", "V3", "V4", "V5", "V6") ) %>% left_join( hct116.test.rep1 %>% select( V1, V2, V3, V4, V5, V6, hct116.T21.rep1.log2fc, Strata.sd, weight), by=c("V1", "V2", "V3", "V4", "V5", "V6")) %>% left_join( hct116.test.rep2 %>% select( V1, V2, V3, V4, V5, V6, hct116.T21.rep2.log2fc, Strata.sd, weight), by=c("V1", "V2", "V3", "V4", "V5", "V6")) %>% left_join( GM.test.rep1 %>% select( V1, V2, V3, V4, V5, V6, GM.T15.rep1.log2fc, Strata.sd, weight), by=c("V1", "V2", "V3", "V4", "V5", "V6")) %>% left_join( GM.test.rep2 %>% select( V1, V2, V3, V4, V5, V6, GM.T15.rep2.log2fc, Strata.sd, weight), by=c("V1", "V2", "V3", "V4", "V5", "V6"))
+
+write.csv( rbind.data.frame( sgRNA_data_final %>% filter(V1 == "gi1"), sgRNA_data_final %>% filter(V1 == "gi2"), sgRNA_data_final %>% filter(V1 == "choose"), sgRNA_data_final %>% filter(V1 == "essen"), sgRNA_data_final %>% filter(V1 == "gene"), sgRNA_data_final %>% filter(V1 == "other"),  sgRNA_data_final %>% filter(V1 == "reverse"), sgRNA_data_final %>% filter(V1 == "negative"), sgRNA_data_final %>% filter(V1 == "control") ), "../TableS1_sgRNA_data_final.csv")
+
+
+gi_data_final   <- hct116.gene.gi %>% mutate(genename.x = NULL, genename.y = NULL) %>% inner_join( GM.gene.gi, by=names(hct116.gene.gi)[1:4] )
+gi_data_final.1 <- gi_data_final %>% filter(significant.x == "Y", significant.y == "Y") %>% arrange( hct116.T21.gi + GM.T15.gi ) 
+gi_data_final.2 <- gi_data_final %>% filter(significant.x == "Y", significant.y != "Y") %>% arrange( hct116.T21.gi ) 
+gi_data_final.3 <- gi_data_final %>% filter(significant.x != "Y", significant.y == "Y") %>% arrange( GM.T15.gi ) 
+gi_data_final.4 <- gi_data_final %>% filter(significant.x != "Y", significant.y != "Y") %>% arrange( hct116.T21.gi + GM.T15.gi ) 
+gi_data_final   <- rbind.data.frame(  gi_data_final.1,  gi_data_final.2,  gi_data_final.3,  gi_data_final.4 ) %>% mutate( pair = paste(genename.x, genename.y, sep=".") ) 
+
+write.csv(gi_data_final, "../TableS2_gi_data_final.csv")
+
+
+write.csv(hct116.gene %>% select(V1, V2, V3, V4, hct116.T21.log2fc) %>% inner_join(genename, c("V3" = "gene")) %>% inner_join(sanger, by=c("genename")) %>% filter( V1 == "essen" ) %>% select( V1, V2, V3, genename, hct116.T21.log2fc, HCT.116.corrected ), "../TableS2_inset_Depencency_Sanger.csv" )
