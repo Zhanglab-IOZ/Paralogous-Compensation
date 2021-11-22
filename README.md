@@ -2,7 +2,7 @@
 
 ### Requirments
 R 3.6.3 or above is required.
-Pacakges including "dplyr", "reshape2", "ggplot2", "ggsignif", "gridExtra" and "ggbeeswarm" are needed. Please install them first before running the scripts.
+Pacakges including "dplyr", "reshape2", "gridExtra", "ggplot2", "ggsignif", "ggrepel" and "ggbeeswarm" are needed. Please install them first before running the scripts.
 
 ### Description
 datafiles/: Essential raw data for the analysis.<br />
