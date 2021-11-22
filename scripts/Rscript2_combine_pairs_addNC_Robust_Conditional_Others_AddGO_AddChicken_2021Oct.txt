@@ -21,7 +21,7 @@ compare.gi    <- read.csv("../datafiles/Compare.gi.20200912novel.csv", header=T,
 compare.gi    <- compare.gi %>% filter(V1 == "choose") %>% rename(gene1 = genename.x, gene2 = genename.y)
 compare.gi    <- compare.gi %>% mutate(gi = ifelse(gi == "negative GI", "Negative", "others"))
 
-Parrish.raw    <- read.csv("../datafiles/phoebe.2021BioRxiv.csv", header=T, row.names=1)
+Parrish.raw    <- read.csv("../datafiles/Phoebe.2021BioRxiv.csv", header=T, row.names=1)
 Parrish.raw    <- Parrish.raw %>% select(target1, target2, PC9_GI_flag, HeLa_GI_flag, GI_flag) %>% rename(gene1 = target1, gene2 = target2) %>% mutate(significant.x = ifelse(PC9_GI_flag == "SL_in_PC9", "Y", "N"), significant.y = ifelse(HeLa_GI_flag == "SL_in_HeLa", "Y", "N")) %>% mutate(gi = ifelse(GI_flag == "synthetic_lethal", "Negative", "others"))
 Parrish        <- Parrish.raw %>% select(gene1, gene2, gi)
 
