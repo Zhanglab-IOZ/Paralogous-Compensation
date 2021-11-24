@@ -421,7 +421,7 @@ Thompson.rate <- Thompson %>% select(pair, Type, A375.gi, Mewo.gi, RPE1.gi) %>% 
 k <- t.test(Thompson.rate[Thompson.rate$Type == "Duplicate",]$ratio, Thompson.rate[Thompson.rate$Type == "Non-duplicate",]$ratio )$p.value %>% format(digits = 2)
 s <- data.frame("source" = c("Duplicate", "Non-duplicate"), "value" = c( mean( Thompson.rate[Thompson.rate$Type == "Duplicate",]$ratio ), mean( Thompson.rate[Thompson.rate$Type == "Non-duplicate",]$ratio ) ), "se" = c( sd( Thompson.rate[Thompson.rate$Type == "Duplicate",]$ratio ), sd( Thompson.rate[Thompson.rate$Type == "Non-duplicate",]$ratio ) ), source = c("Thompson", "Thompson") )
 
-p.gi.rate.Thompson <- s %>% ggplot() + geom_bar(aes(x=source, y=value, fill=source), stat="identity") + geom_errorbar( aes(x=source, ymin=value-se, ymax=value+se), width=0.3 ) + ylim(c(0, 0.4))  + theme_bw() + scale_fill_manual( values=c("#8BC8ED", "gray70"), guide = guide_legend(title = "Studies"), labels=c("Thompson et al.") ) + xlab("Gene pairs") + ylab ("The proportion of gene pairs\n with negative GI") + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.title=element_text(size=21, face="bold"), legend.text=element_text(size=17),  plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position=c(0.5,0.7)) + geom_hline( yintercept=0.023, lty="dashed") + geom_text(aes(x=source, y=value2, label=label), size=5.8, data = s %>% mutate(value2 = value + 0.03, label = format( value, digits = 2 )) ) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.14, 0.15, 0.15, 0.14)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.17, label=k), size=5.8)
+p.gi.rate.Thompson <- s %>% ggplot() + geom_bar(aes(x=source, y=value, fill=source), stat="identity") + geom_errorbar( aes(x=source, ymin=value-se, ymax=value+se), width=0.3 ) + ylim(c(0, 0.4))  + theme_bw() + scale_fill_manual( values=c("#8BC8ED", "gray70"), guide = guide_legend(title = "Studies"), labels=c("Thompson et al.") ) + xlab("Gene pairs") + ylab ("The proportion of gene pairs\n with negative GI") + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.title=element_text(size=21, face="bold"), legend.text=element_text(size=17),  plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position=c(0.5,0.7)) + geom_text(aes(x=source, y=value2, label=label), size=5.8, data = s %>% mutate(value2 = value + 0.03, label = format( value, digits = 2 )) ) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.14, 0.15, 0.15, 0.14)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.17, label=k), size=5.8)
 
 
 ###A comparison of negative GI sharing frequency in Thompson et al.
@@ -442,6 +442,9 @@ Cell_data_cells <- Cell_data_K562 %>% inner_join( Cell_data_Jurkat, by=c("gene1"
 Cell_data_cells %>% select(gi.x, gi.y) %>% table()
 ( Cell_data_cells %>% filter(gi.x == "Y", gi.y == "Y") %>% nrow() )/( Cell_data_cells %>% filter(gi.x == "Y" | gi.y == "Y") %>% nrow() )
 
+
+###Comparing sharing frequency between duplicate pairs in combined set and non-duplicate pairs in Horbeck et al. (2018).
+fisher.test( matrix(c(50, 160, 82, 272 + 850), nrow=2)  )
 
 
 ###Compositary plots
@@ -489,7 +492,6 @@ Go_sum <- read.csv("../datafiles/all_paralogous_GOsum.csv", stringsAsFactors = F
 
 p.GO.BP <- combine.pair.all %>% inner_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% mutate( BP_sum = log10(BP_sum + 1), MF_sum = log10(MF_sum + 1), CC_sum = log10(CC_sum + 1), ) %>%  ggplot(aes(x=type, y=BP_sum)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(2.2, 2.5)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Number of GO terms\n in biological processes")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + scale_y_continuous(breaks=c(0, 1, 2), labels=c(0, 10, 100))
 
-p.GO.MF <- combine.pair.all %>% inner_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% mutate( BP_sum = log10(BP_sum + 1), MF_sum = log10(MF_sum + 1), CC_sum = log10(CC_sum + 1), ) %>%  ggplot(aes(x=type, y=MF_sum)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(2.2, 2.5)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Number of GO terms\n in molecular functions")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + scale_y_continuous(breaks=c(0, 1, 2), labels=c(0, 10, 100))
 
 p.GO.CC <- combine.pair.all %>% inner_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% mutate( BP_sum = log10(BP_sum + 1), MF_sum = log10(MF_sum + 1), CC_sum = log10(CC_sum + 1), ) %>%  ggplot(aes(x=type, y=CC_sum)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(2.2, 2.5)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Number of GO terms\n in cellular components") + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + scale_y_continuous(breaks=c(0, 1, 2), labels=c(0, 10, 100))
 
@@ -550,6 +552,9 @@ k2 <- (combine.pair.all.branch %>% filter(branch %in% c(0, 1, 2, 3))  %>% dcast(
 p.combine.branch  <-  combine.pair.all.branch %>% inner_join(aggregate(combine.pair.all.branch$Freq, by=list(combine.pair.all.branch$type), sum) %>% rename(sum = x), by=c("type" = "Group.1") ) %>% mutate(ratio = Freq/sum) %>% ggplot(aes()) + geom_bar(aes(x=branch, y=ratio, fill=type), stat="identity", position = "dodge") + theme_bw() + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), guide = guide_legend( title = "Negative GI type"), labels= c("Core", "Conditional", "Non-nGI") ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text.x=element_text(size=17, angle=30), axis.text.y=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = c(0.8, 0.7) ) + xlab("Gene origination branch") + ylab("Proportion") + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=5.5, y=c(0.87, 0.80), label=paste("P value =", c(k1, k2)), sep=' ' ), size=5.8) + scale_x_discrete(labels = taxon)
 
 
+branch.name <- data.frame("branch" = 0:13, "Nodes" = taxon)
+branch.name$Nodes <- sub("\n", "", branch.name$Nodes )
+
 
 ###When we only focused on WGD pairs.
 combine.pair.all.WGD <- combine.pair.all %>% mutate( "Duplication" = ifelse(pair %in% c(ohnologs$pair1, ohnologs$pair2), "WGD", "SSD")) %>% select(type, Duplication) %>% table() %>% as.data.frame() %>% dcast(type~Duplication, value.var="Freq") %>% mutate(ratio = WGD/(WGD + SSD)) %>% mutate( sd = sqrt( ratio*(1-ratio)/(SSD + WGD) ) )
@@ -557,7 +562,7 @@ combine.pair.all.WGD <- combine.pair.all %>% mutate( "Duplication" = ifelse(pair
 k1 <- (combine.pair.all.WGD %>% filter(type %in% c("Robust", "Conditional") ) %>% select(SSD, WGD) %>% as.matrix() %>% fisher.test())$p.value %>% format(digits=2)
 k2 <- (combine.pair.all.WGD %>% filter(type %in% c("Robust", "Others") ) %>% select(SSD, WGD) %>% as.matrix() %>% fisher.test())$p.value %>% format(digits=2)
 
-p.combine.ohnologs  <- combine.pair.all.WGD %>% ggplot(aes(x=type,  y=ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=ratio-sd, ymax=ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of \nWGD duplicate pair") +  geom_text(aes(x=type, y=y, label=label), data=combine.pair.all.WGD %>% mutate(y=0.98, label = paste(WGD, WGD + SSD, sep='/') ), size=5.8)  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
+p.combine.ohnologs  <- combine.pair.all.WGD %>% ggplot(aes(x=type,  y=ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=ratio-sd, ymax=ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of \nWGD pairs") +  geom_text(aes(x=type, y=y, label=label), data=combine.pair.all.WGD %>% mutate(y=0.98, label = paste(WGD, WGD + SSD, sep='/') ), size=5.8)  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
 
 p.combine.ohnologs.identity <- combine.pair.all %>% filter( pair %in% c(ohnologs$pair1, ohnologs$pair2 )) %>% inner_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(95, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity (WGD pairs)")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
 
@@ -654,9 +659,9 @@ robust.cnv.exp.test.cancer.active$value <- factor(robust.cnv.exp.test.cancer.act
 
 p.robust.active.number <- robust.cnv.exp.test.cancer.active %>% ggplot() + geom_bar(aes(y=value, x=Freq, fill=upregulation), stat="identity", width=0.6) + theme_bw() + theme(axis.title.x=element_text(size=20, face="bold"), axis.title.y=element_blank(), axis.ticks.y=element_blank(), axis.text.x=element_text(size=20), axis.text.y=element_blank(), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), plot.tag=element_text(size=28, face="bold"), legend.position="bottom" ) + scale_fill_manual( values=c("grey70", "#D76D55"), guide = guide_legend(title = "Potentially active\n compensation of\n paralogous gene "), labels=c("No", "Yes")) + scale_x_continuous(breaks=c(0:6 * 2), labels=c(0:6 * 2), position="top") + xlab("Number of cases")
 
-p.robust.active.distribution <- robust.cnv.exp.test.cancer.active  %>% rename(number = Freq) %>% select( upregulation, number) %>% table() %>% as.data.frame() %>% filter( upregulation == "Y", Freq > 0) %>% ggplot(aes(x=number, y=Freq)) + geom_bar(stat="identity", width=0.8) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Number of \nactive compensation") + ylab("Frequency") 
+p.robust.active.distribution <- robust.cnv.exp.test.cancer.active  %>% rename(number = Freq) %>% select( upregulation, number) %>% table() %>% as.data.frame() %>% filter( upregulation == "Y", Freq > 0) %>% ggplot(aes(x=number, y=Freq)) + geom_bar(stat="identity", width=0.8) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Number of \npotential active compensation") + ylab("Frequency") 
 
-p.robust.active.proportion   <- robust.cnv.exp.test.cancer.active  %>% filter(  upregulation == "Y") %>% inner_join( aggregate(robust.cnv.exp.test.cancer.active$Freq, by=list(robust.cnv.exp.test.cancer.active$value), sum), by=c("value" = "Group.1") ) %>% mutate( ratio = Freq/x ) %>% ggplot( aes(x=ratio) ) + geom_histogram(fill="#D76D55", col="black", binwidth = 0.1 ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Proportion of pairs \nwith active compensation") + ylab("Frequency") + scale_x_continuous(breaks = (0:2)/2, labels = (0:2)/2)
+p.robust.active.proportion   <- robust.cnv.exp.test.cancer.active  %>% filter(  upregulation == "Y") %>% inner_join( aggregate(robust.cnv.exp.test.cancer.active$Freq, by=list(robust.cnv.exp.test.cancer.active$value), sum), by=c("value" = "Group.1") ) %>% mutate( ratio = Freq/x ) %>% ggplot( aes(x=ratio) ) + geom_histogram(fill="#D76D55", col="black", binwidth = 0.1 ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Proportion of \npotential active compensation") + ylab("Frequency") + scale_x_continuous(breaks = (0:2)/2, labels = (0:2)/2)
 
 
 ###Duplicate pairs without negative GI. Choose some. Preparing files.
@@ -681,6 +686,7 @@ s1 <- (k0 %>% filter(type %in% c("Robust", "Conditional") ) %>% select(active, p
 s2 <- (k0 %>% filter(type %in% c("Robust", "Others") ) %>% select(active, passive) %>% fisher.test())$p.value %>% format(digits=2)
 s3 <- (k0 %>% filter(type %in% c("Conditional", "Others") ) %>% select(active, passive) %>% fisher.test())$p.value %>% format(digits=2)
 
+
 write.csv(rbind.data.frame(all.cnv.exp.test  %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) , Others.cnv.exp.test %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) ) %>% mutate(compensation = ifelse(qvalue < 0.05, "active", "passive")) %>% inner_join( combine.pair.all %>% select(gene1, gene2, pair, type) , by="pair" ) %>% arrange(type, pair, value, data) %>% inner_join( tcga.loss, by=c("value" = "genename", "data" = "data") ), "../TableS9_combine.pair.cnv.exp.test.csv" )
 
 
@@ -704,15 +710,15 @@ binom.test(54, 574, p = s.random)
 binom.test(61, 712, p = s.random)
 
 
-p.active.ratio <- k0 %>% ggplot(aes(x=type,  y=Ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=Ratio-sd, ymax=Ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=23, face="bold"), axis.text=element_text(size=21), legend.text=element_text(size=21), plot.title=element_text(size=23, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of \nparalog active compensation") + geom_text(aes(x=type, y=ypos, label=label), data=(k0 %>% mutate(ypos=0.38, label=paste(active, Total, sep="/"))), size=6.5) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.26, label=s1), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.24, 0.25, 0.25, 0.24)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.0, y=0.31, label=s2), size=5.8) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 3, 3), "y"=c(0.29, 0.30, 0.30, 0.29)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.5, y=0.21, label=s3), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(2, 2, 3, 3), "y"=c(0.19, 0.20, 0.20, 0.19)), lwd=0.7) + geom_hline(yintercept=s.random, lty="dashed") +  scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
+p.active.ratio <- k0 %>% ggplot(aes(x=type,  y=Ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=Ratio-sd, ymax=Ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=23, face="bold"), axis.text=element_text(size=21), legend.text=element_text(size=21), plot.title=element_text(size=23, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of pairs \ncompatible with active compensation") + geom_text(aes(x=type, y=ypos, label=label), data=(k0 %>% mutate(ypos=0.38, label=paste(active, Total, sep="/"))), size=6.5) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.26, label=s1), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.24, 0.25, 0.25, 0.24)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.0, y=0.31, label=s2), size=5.8) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 3, 3), "y"=c(0.29, 0.30, 0.30, 0.29)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.5, y=0.21, label=s3), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(2, 2, 3, 3), "y"=c(0.19, 0.20, 0.20, 0.19)), lwd=0.7) + geom_hline(yintercept=s.random, lty="dashed") +  scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
 
 
 pdf("../Figure5B_Probability.active_2021Oct.pdf", width=9, height=7)
-p.active.ratio + labs(tag = "B")
+grid.arrange( p.active.ratio + labs(tag = "B"), layout_matrix = matrix(1, nrow=1) )
 dev.off()
 
 pdf("../Figure5C_inset_robust.cnv.tcga.active.compensation.proportion_2021Oct.pdf", width=2.5, height=3)
-p.robust.active.proportion
+grid.arrange( p.robust.active.proportion, layout_matrix = matrix(1, nrow=1) )
 dev.off()
 
 pdf("../Figure5C_robust.cnv.tcga.compensation_2021Oct.pdf", width=20, height=16)
@@ -721,7 +727,7 @@ dev.off()
 
 
 pdf("../FigureS5C_robust.cnv.tcga.dgidb.supplementary5.pdf", width=4, height=15)
-p.robust.drug + labs(tag = "C") + theme(legend.position = "bottom")
+grid.arrange( p.robust.drug + labs(tag = "C") + theme(legend.position = "bottom"), layout_matrix = matrix(1, nrow=1) )
 dev.off()
 
 
@@ -761,15 +767,15 @@ dev.off()
 
 
 pdf("../FigureS6_Robust.gi.Features.identity.supplementary6_2021Oct.pdf", width=18, height=18)
-grid.arrange(  p.combine.ohnologs + labs(tag="A"), p.GO.MF + labs(tag="B"), p.GO.CC + labs(tag="C"),
- p.combine.expression.tau.postnatal + labs(tag="D"),p.combine.expression.tau.tissue + labs(tag="D"),   p.combine.expression.level.postnatal + labs(tag="D"),  p.combine.expression.tau.chicken.postnatal + labs(tag="E"), p.combine.expression.tau.tissue.chicken + labs(tag="E"),   p.combine.expression.level.chicken.postnatal + labs(tag="E"), layout_matrix = matrix( 1:9, nrow=3, byrow=T) )
+grid.arrange(  p.combine.ohnologs + labs(tag="A"),  p.GO.CC + labs(tag="C"),
+ p.combine.expression.tau.postnatal + labs(tag="B"),p.combine.expression.tau.tissue + labs(tag="B"),   p.combine.expression.level.postnatal + labs(tag="B"),  p.combine.expression.tau.chicken.postnatal + labs(tag="B"), p.combine.expression.tau.tissue.chicken + labs(tag="B"),   p.combine.expression.level.chicken.postnatal + labs(tag="B"), layout_matrix = matrix( rep(1:8,c(3,3,2,2,2,2,2,2)), nrow=3, byrow=T) )
 dev.off()
 
 
 
 ###Saving all data.
 write.csv( 
-all.pair.gi.count %>% inner_join(combine.pair.all, by=c("pair")) %>% left_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% select(gene1, gene2, pair, type, identity, corum) %>% left_join( genename %>% inner_join( gentree, by=c("V1" = "gene")) %>% select(V2, branch), by=c("gene1" = "V2")) %>% left_join( genename %>% inner_join( gentree, by=c("V1" = "gene")) %>% select(V2, branch), by=c("gene2" = "V2")) %>% mutate(branch = ifelse(branch.x < branch.y, branch.y, branch.x) ) %>% mutate( "Duplication" = ifelse(pair %in% c(ohnologs$pair1, ohnologs$pair2), "WGD", "SSD")) %>% left_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% 
+all.pair.gi.count %>% inner_join(combine.pair.all, by=c("pair")) %>% left_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% select(gene1, gene2, pair, type, identity, corum) %>% left_join( genename %>% inner_join( gentree, by=c("V1" = "gene")) %>% select(V2, branch), by=c("gene1" = "V2")) %>% left_join( genename %>% inner_join( gentree, by=c("V1" = "gene")) %>% select(V2, branch), by=c("gene2" = "V2")) %>% mutate(branch = ifelse(branch.x < branch.y, branch.y, branch.x) ) %>% left_join(branch.name, by="branch") %>% mutate( "Duplication" = ifelse(pair %in% c(ohnologs$pair1, ohnologs$pair2), "WGD", "SSD")) %>% left_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% 
 
 left_join( combine.pair.all %>% left_join( gene.expression.prenatal, by=c("gene1" = "genename") ) %>% left_join( gene.expression.prenatal, by=c("gene2" = "genename") ) %>% mutate(TPM = TPM.x + TPM.y) %>% mutate(TPM = TPM/2), by=c("gene1", "gene2", "pair", "type", "corum") ) %>% 
 left_join( combine.pair.all %>% left_join( gene.tau.prenatal, by=c("gene1" = "genename") ) %>% left_join( gene.tau.prenatal, by=c("gene2" = "genename") ) %>% mutate(tau = tau.x + tau.y) %>% mutate(tau = tau/2),  by=c("gene1", "gene2", "pair", "type", "corum") ) %>% 
