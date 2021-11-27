@@ -286,19 +286,21 @@ return(p)
 p.bioplex.Ours   <- bioplex.plot( compare.gi )
 p.bioplex.Dede   <- bioplex.plot( Hart2 )
 p.bioplex.Thomas <- bioplex.plot( nbt )
-p.bioplex.Parrish <- bioplex.plot( Parrish )
+p.bioplex.Parrish  <- bioplex.plot( Parrish )
 p.bioplex.Thompson <- bioplex.plot( Thompson )
 grid.arrange(p.bioplex.Ours, p.bioplex.Dede, p.bioplex.Thomas, p.bioplex.Parrish, p.bioplex.Thompson, layout_matrix = matrix( 1:5, nrow=1))
 
 
 
 ### A comparison file of negative GI rate
-s <- data.frame("CellLine" = c("A549", "HT29", "OVCAR8", "PC9", "HeLa", "A375", "MeWo", "RPE1", "HCT116", "GM12878"), "GI" = c(17, 21, 31, 87, 70, 38, 26, 40, 19, 23), "Total" = c(403, 403, 403, 1030, 1030, 645, 645, 645, 678, 678), source = c("Dede", "Dede", "Dede", "Parrish", "Parrish", "Thompson", "Thompson", "Thompson", "Ours", "Ours") )
-s <- s %>% mutate(value = GI/Total) %>% mutate( sd = sqrt(value * (1-value)/Total))
+s <- all.pair %>% select(pair, A549.gi, HT29.gi, OVCAR8.gi, PC9.gi, HeLa.gi, A375.gi, Mewo.gi, RPE1.gi, HCT116.gi, GM12878.gi) %>% melt( id.vars="pair" ) %>% select(variable, value) %>% table() %>% as.data.frame() %>% dcast(variable~value, value.var="Freq") %>% mutate(Total = N + Y) %>% mutate(ratio = Y/Total) %>% mutate( sd = sqrt(ratio * (1-ratio)/Total))
+s$CellLine <- sub(".gi", "", s$variable )
+s$source <- c("Dede", "Dede", "Dede", "Parrish", "Parrish", "Thompson", "Thompson", "Thompson", "Ours", "Ours")
+
 s$CellLine <- factor( s$CellLine, levels=s$CellLine )
 s$source   <- factor( s$source, levels=c("Dede", "Parrish", "Thompson", "Ours") )
 
-p.gi.rate <-  s %>% ggplot() + geom_bar(aes(x=CellLine, y=value, fill=source), stat="identity") + ylim(c(0, 0.4))  + geom_errorbar(aes(x=CellLine,ymax=value + sd,ymin=value - sd), width=0.2) + theme_bw() + scale_fill_manual( values=c("#C16852", "#9D97C4", "#8BC8ED", "#FAD36A"), guide = guide_legend(title = "Studies"), labels=c("Dede et al.", "Parrish et al.", "Thompson et al.", "Yu et al.") ) + xlab("Human cell lines") + ylab("The proportion of duplicate pairs\n with negative GI") + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17),  plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position=c(0.8,0.6)) + geom_text(aes(x=CellLine, y=value2, label=Freq2),size=5.8, data = s %>% mutate(value2 = 0.4, Freq2=paste(GI, Total, sep="/")) ) + geom_text(aes(x=CellLine, y=value2, label=label), size=5.8, data = s %>% mutate(value2 = value + 0.03, label = format( value, digits = 1 )) ) + geom_hline( yintercept=0.015, lty="dashed")
+p.gi.rate <-  s %>% ggplot() + geom_bar(aes(x=CellLine, y=ratio, fill=source), stat="identity") + ylim(c(0, 0.4))  + geom_errorbar(aes(x=CellLine, ymax=ratio + sd,ymin=ratio - sd), width=0.2) + theme_bw() + scale_fill_manual( values=c("#C16852", "#9D97C4", "#8BC8ED", "#FAD36A"), guide = guide_legend(title = "Studies"), labels=c("Dede et al.", "Parrish et al.", "Thompson et al.", "Yu et al.") ) + xlab("Human cell lines") + ylab("The proportion of duplicate pairs\n with negative GI") + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17),  plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position=c(0.8,0.6)) + geom_text(aes(x=CellLine, y=value2, label=Freq2),size=5.8, data = s %>% mutate(value2 = 0.4, Freq2=paste(Y, Total, sep="/")) ) + geom_text(aes(x=CellLine, y=value2, label=label), size=5.8, data = s %>% mutate(value2 = ratio + 0.03, label = format( ratio, digits = 1 )) ) + geom_hline( yintercept=0.015, lty="dashed")
 
 
 
