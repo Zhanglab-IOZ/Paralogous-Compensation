@@ -1,0 +1,212 @@
+library(dplyr);library(reshape2)
+
+
+###gene pairs to be focused on
+all.pair <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F)
+all.pair <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
+
+GI.gene    <- all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+nonGI.gene <- all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+
+
+###TCGA. Raw data
+tcga.exp <- readRDS( "../datafiles/tcga.cBioportal.exp.rds" )
+tcga.cnv <- readRDS( "../datafiles/tcga.cBioportal.cnv.rds" )
+
+
+###CNV loss of GISTIC all data. CNV loss of high frequency
+tcga.cnv.freq <- readRDS( "../datafiles/TCGA.cnv.cBioportal.rds" )
+tcga.abbrev   <- read.table("../datafiles/TCGA.abbreviation.txt",sep="\t")
+
+tcga.cnv.freq  <- tcga.cnv.freq %>% inner_join(tcga.abbrev, by=c("data" = "V1")) %>% rename(Cancer = V2)
+tcga.loss      <- tcga.cnv.freq %>% filter(cnv == "-1") %>% inner_join( tcga.cnv.freq %>% filter(cnv == "-2") %>% select(genename, Freq, data), by=c("genename", "data"))  %>% mutate(Freq.x = Freq.x + Freq.y) %>% rename(Freq = Freq.x ) %>% mutate(ratio = Freq/sum, Freq.y = NULL) %>% arrange(data, desc(ratio) )  ###combine CNV == -1 and CNV == -2
+tcga.loss$rank <- 1:nrow(tcga.loss)
+tcga.loss      <- tcga.loss %>% inner_join(aggregate(tcga.loss$rank, by=list(tcga.loss$data), min), by=c("data" = "Group.1")) %>% mutate(rank = rank - x +1) %>% mutate(x = NULL)
+tcga.loss$data   <- factor(tcga.loss$data, levels=tcga.abbrev[,1])
+tcga.loss$Cancer <- factor(tcga.loss$Cancer,levels=tcga.abbrev[,2])
+
+GI.gene.loss    <- tcga.loss %>%  filter(ratio > 0.3 | rank < 500) %>% filter(genename %in% GI.gene)
+nonGI.gene.loss <- tcga.loss %>%  filter(ratio > 0.3 | rank < 500) %>% filter(genename %in% nonGI.gene)
+for(i in 1:(dim( GI.gene.loss )[2])){if( class( GI.gene.loss[,i] ) == "factor"){ GI.gene.loss[,i] <- as.character( GI.gene.loss[,i] ) }}
+for(i in 1:(dim( nonGI.gene.loss )[2])){if( class( nonGI.gene.loss[,i] ) == "factor"){ nonGI.gene.loss[,i] <- as.character( nonGI.gene.loss[,i] ) }}
+
+
+
+###Run the pipeline, for GI.genes
+cancertypes <- GI.gene.loss$data %>% unique()
+
+genes.cnv.exp      = list()
+s = "OV"
+
+for(s in cancertypes ){
+filename =  paste("GI.genes.cnv.exp.test.", s, ".rds", sep='')
+
+if( filename %in% list.files() ){
+print(paste(s, "jumped", sep=" "))
+}else{
+genes <- GI.gene.loss %>% filter(data == s) %>% select(genename, data) %>% filter(genename %in% (tcga.cnv[[s]])$Hugo_Symbol ) %>% filter(genename %in% (tcga.exp[[s]])$Hugo_Symbol )
+
+
+### Part I. Test of upregulation after focal gene's CNV loss
+genes.cnv.exp[[s]] <- ""
+genes.cnv.exp[[s]] <- genes %>% inner_join( tcga.cnv[[s]] %>% filter(value %in% c("-1", "0")), by=c("genename" = "Hugo_Symbol" )) %>% inner_join( tcga.cnv[[s]] %>% filter(value == "0"), by=c( "Sample" )) %>% inner_join( tcga.exp[[s]], by=c("Hugo_Symbol", "Sample") )
+
+genes.cnv.exp.count <- genes.cnv.exp[[s]] %>% select(genename, data, value.x, Hugo_Symbol) %>% dcast(genename+data+Hugo_Symbol~value.x, fun.aggregate = length)
+genes.cnv.exp.var   <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value.x, genes.cnv.exp[[s]]$Hugo_Symbol), var)
+genes.cnv.exp.mean  <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value.x, genes.cnv.exp[[s]]$Hugo_Symbol), mean)
+
+genes.cnv.exp.count       <- genes.cnv.exp.count %>% rename( "CNVloss" = "-1", "diploid" = "0")
+names(genes.cnv.exp.var)  <- c("genename", "data", "value.x", "Hugo_Symbol", "var" )
+names(genes.cnv.exp.mean) <- c("genename", "data", "value.x", "Hugo_Symbol", "mean" )
+
+genes.cnv.exp.var  <- genes.cnv.exp.var  %>% dcast(genename+data+Hugo_Symbol~value.x, value.var="var") %>% rename( "CNVloss.var" = "-1", "diploid.var" = "0")
+genes.cnv.exp.mean <- genes.cnv.exp.mean %>% dcast(genename+data+Hugo_Symbol~value.x, value.var="mean") %>% rename( "CNVloss.mean" = "-1", "diploid.mean" = "0")
+
+genes.cnv.exp.count.diff <- genes.cnv.exp.count %>% inner_join(genes.cnv.exp.mean, by=c("genename", "data", "Hugo_Symbol")) %>% inner_join(genes.cnv.exp.var, by=c("genename", "data", "Hugo_Symbol"))
+for(i in 1:(dim( genes.cnv.exp.count.diff )[2])){if( class( genes.cnv.exp.count.diff[,i] ) == "factor"){ genes.cnv.exp.count.diff[,i] <- as.character( genes.cnv.exp.count.diff[,i] ) }}
+
+
+### Part II. T statistics and adjusted df. Obtaining P value.
+genes.cnv.exp.count.diff <- genes.cnv.exp.count.diff  %>% mutate(diff = CNVloss.mean - diploid.mean, se = (CNVloss.var/CNVloss + diploid.var/diploid) ) %>% mutate(se = sqrt(se)) %>% mutate(t.value = diff/se) %>% mutate(R = (CNVloss.var/CNVloss)/(CNVloss.var/CNVloss + diploid.var/diploid)) %>% mutate(df = R*R/(CNVloss - 1) + (1 - R)*(1 - R)/(diploid - 1)) %>% mutate(df = 1/df)  %>% mutate(p.value = 1 - pt(q = t.value, df = df))
+
+genes.cnv.exp.count.diff.upregulation <- genes.cnv.exp.count.diff %>% na.omit()
+
+
+### Part III. Test of downregulation after focal gene's CNV loss
+genes.cnv.exp[[s]] <- ""
+genes.cnv.exp[[s]] <-  genes %>% inner_join( tcga.cnv[[s]] %>% filter(value %in% c("-1", "0")), by=c("genename" = "Hugo_Symbol" )) %>%  inner_join( genes %>% inner_join( tcga.exp[[s]], by=c("genename" = "Hugo_Symbol" )), by=c("genename", "data", "Sample") )
+
+genes.cnv.exp.count <- genes.cnv.exp[[s]] %>% select(genename, data,  value) %>% dcast(genename+data~value, fun.aggregate = length)
+genes.cnv.exp.var   <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value), var)
+genes.cnv.exp.mean  <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value), mean)
+
+genes.cnv.exp.count       <- genes.cnv.exp.count %>% rename( "CNVloss" = "-1", "diploid" = "0")
+names(genes.cnv.exp.var)  <- c("genename", "data", "value", "var" )
+names(genes.cnv.exp.mean) <- c("genename", "data", "value", "mean" )
+
+genes.cnv.exp.var  <- genes.cnv.exp.var  %>% dcast(genename+data~value, value.var="var")  %>% rename( "CNVloss.var" = "-1", "diploid.var" = "0")
+genes.cnv.exp.mean <- genes.cnv.exp.mean %>% dcast(genename+data~value, value.var="mean") %>% rename( "CNVloss.mean" = "-1", "diploid.mean" = "0")
+
+genes.cnv.exp.count.diff <- genes.cnv.exp.count %>% inner_join(genes.cnv.exp.mean, by=c("genename", "data")) %>% inner_join(genes.cnv.exp.var, by=c("genename", "data"))
+for(i in 1:(dim( genes.cnv.exp.count.diff )[2])){if( class( genes.cnv.exp.count.diff[,i] ) == "factor"){ genes.cnv.exp.count.diff[,i] <- as.character( genes.cnv.exp.count.diff[,i] ) }}
+
+###Part IV. T statistics and adjusted df.
+genes.cnv.exp.count.diff <- genes.cnv.exp.count.diff  %>% mutate(diff = CNVloss.mean - diploid.mean, se = (CNVloss.var/CNVloss + diploid.var/diploid) ) %>% mutate(se = sqrt(se)) %>% mutate(t.value = diff/se) %>% mutate(R = (CNVloss.var/CNVloss)/(CNVloss.var/CNVloss + diploid.var/diploid)) %>% mutate(df = R*R/(CNVloss - 1) + (1 - R)*(1 - R)/(diploid - 1)) %>% mutate(df = 1/df)  %>% mutate(p.value = pt(q = t.value, df = df))   ###Remember it is downregulation now.
+
+genes.cnv.exp.count.diff.downregulation <- genes.cnv.exp.count.diff  %>% mutate( Hugo_Symbol = genename ) %>% select(genename, data, Hugo_Symbol, diploid, CNVloss, diploid.mean, CNVloss.mean, diploid.var, CNVloss.var, diff, se, t.value, R, df, p.value)  %>% na.omit()
+
+
+###Part V. Combining above t.test results and perform FDR test.
+genes.cnv.exp.test.fdr  <- function(dataset){
+
+genes.cnv.exp.test.all   = data.frame()
+
+for( j in unique( dataset$genename ) ){
+genes.cnv.exp.test.gene <- dataset %>% filter( genename == j )
+genes.cnv.exp.test.gene$qvalue  <- p.adjust( genes.cnv.exp.test.gene$p.value, method="fdr" )
+
+genes.cnv.exp.test.all   <- rbind.data.frame(genes.cnv.exp.test.all, genes.cnv.exp.test.gene)
+}
+return( genes.cnv.exp.test.all )
+}
+
+
+genes.cnv.exp.test.fdr.res <- genes.cnv.exp.test.fdr( rbind.data.frame(genes.cnv.exp.count.diff.upregulation, genes.cnv.exp.count.diff.downregulation) )
+
+
+###Part VI. Save data
+saveRDS( genes.cnv.exp.test.fdr.res, filename )
+print(paste(s, "finished", sep=" "))
+}
+}
+
+
+
+###Run the pipeline, for nonGI.genes
+cancertypes <- nonGI.gene.loss$data %>% unique()
+
+genes.cnv.exp      = list()
+s = "OV"
+
+for(s in cancertypes ){
+filename =  paste("nonGI.genes.cnv.exp.test.", s, ".rds", sep='')
+
+if( filename %in% list.files() ){
+print(paste(s, "jumped", sep=" "))
+}else{
+genes <- nonGI.gene.loss %>% filter(data == s) %>% select(genename, data) %>% filter(genename %in% (tcga.cnv[[s]])$Hugo_Symbol ) %>% filter(genename %in% (tcga.exp[[s]])$Hugo_Symbol )
+
+
+### Part I. Test of upregulation after focal gene's CNV loss
+genes.cnv.exp[[s]] <- ""
+genes.cnv.exp[[s]] <- genes %>% inner_join( tcga.cnv[[s]] %>% filter(value %in% c("-1", "0")), by=c("genename" = "Hugo_Symbol" )) %>% inner_join( tcga.cnv[[s]] %>% filter(value == "0"), by=c( "Sample" )) %>% inner_join( tcga.exp[[s]], by=c("Hugo_Symbol", "Sample") )
+
+genes.cnv.exp.count <- genes.cnv.exp[[s]] %>% select(genename, data, value.x, Hugo_Symbol) %>% dcast(genename+data+Hugo_Symbol~value.x, fun.aggregate = length)
+genes.cnv.exp.var   <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value.x, genes.cnv.exp[[s]]$Hugo_Symbol), var)
+genes.cnv.exp.mean  <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value.x, genes.cnv.exp[[s]]$Hugo_Symbol), mean)
+
+genes.cnv.exp.count       <- genes.cnv.exp.count %>% rename( "CNVloss" = "-1", "diploid" = "0")
+names(genes.cnv.exp.var)  <- c("genename", "data", "value.x", "Hugo_Symbol", "var" )
+names(genes.cnv.exp.mean) <- c("genename", "data", "value.x", "Hugo_Symbol", "mean" )
+
+genes.cnv.exp.var  <- genes.cnv.exp.var  %>% dcast(genename+data+Hugo_Symbol~value.x, value.var="var") %>% rename( "CNVloss.var" = "-1", "diploid.var" = "0")
+genes.cnv.exp.mean <- genes.cnv.exp.mean %>% dcast(genename+data+Hugo_Symbol~value.x, value.var="mean") %>% rename( "CNVloss.mean" = "-1", "diploid.mean" = "0")
+
+genes.cnv.exp.count.diff <- genes.cnv.exp.count %>% inner_join(genes.cnv.exp.mean, by=c("genename", "data", "Hugo_Symbol")) %>% inner_join(genes.cnv.exp.var, by=c("genename", "data", "Hugo_Symbol"))
+for(i in 1:(dim( genes.cnv.exp.count.diff )[2])){if( class( genes.cnv.exp.count.diff[,i] ) == "factor"){ genes.cnv.exp.count.diff[,i] <- as.character( genes.cnv.exp.count.diff[,i] ) }}
+
+
+### Part II. T statistics and adjusted df. Obtaining P value.
+genes.cnv.exp.count.diff <- genes.cnv.exp.count.diff  %>% mutate(diff = CNVloss.mean - diploid.mean, se = (CNVloss.var/CNVloss + diploid.var/diploid) ) %>% mutate(se = sqrt(se)) %>% mutate(t.value = diff/se) %>% mutate(R = (CNVloss.var/CNVloss)/(CNVloss.var/CNVloss + diploid.var/diploid)) %>% mutate(df = R*R/(CNVloss - 1) + (1 - R)*(1 - R)/(diploid - 1)) %>% mutate(df = 1/df)  %>% mutate(p.value = 1 - pt(q = t.value, df = df))
+
+genes.cnv.exp.count.diff.upregulation <- genes.cnv.exp.count.diff %>% na.omit()
+
+
+### Part III. Test of downregulation after focal gene's CNV loss
+genes.cnv.exp[[s]] <- ""
+genes.cnv.exp[[s]] <-  genes %>% inner_join( tcga.cnv[[s]] %>% filter(value %in% c("-1", "0")), by=c("genename" = "Hugo_Symbol" )) %>%  inner_join( genes %>% inner_join( tcga.exp[[s]], by=c("genename" = "Hugo_Symbol" )), by=c("genename", "data", "Sample") )
+
+genes.cnv.exp.count <- genes.cnv.exp[[s]] %>% select(genename, data,  value) %>% dcast(genename+data~value, fun.aggregate = length)
+genes.cnv.exp.var   <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value), var)
+genes.cnv.exp.mean  <- aggregate(genes.cnv.exp[[s]]$TPM, by=list(genes.cnv.exp[[s]]$genename, genes.cnv.exp[[s]]$data, genes.cnv.exp[[s]]$value), mean)
+
+genes.cnv.exp.count       <- genes.cnv.exp.count %>% rename( "CNVloss" = "-1", "diploid" = "0")
+names(genes.cnv.exp.var)  <- c("genename", "data", "value", "var" )
+names(genes.cnv.exp.mean) <- c("genename", "data", "value", "mean" )
+
+genes.cnv.exp.var  <- genes.cnv.exp.var  %>% dcast(genename+data~value, value.var="var")  %>% rename( "CNVloss.var" = "-1", "diploid.var" = "0")
+genes.cnv.exp.mean <- genes.cnv.exp.mean %>% dcast(genename+data~value, value.var="mean") %>% rename( "CNVloss.mean" = "-1", "diploid.mean" = "0")
+
+genes.cnv.exp.count.diff <- genes.cnv.exp.count %>% inner_join(genes.cnv.exp.mean, by=c("genename", "data")) %>% inner_join(genes.cnv.exp.var, by=c("genename", "data"))
+for(i in 1:(dim( genes.cnv.exp.count.diff )[2])){if( class( genes.cnv.exp.count.diff[,i] ) == "factor"){ genes.cnv.exp.count.diff[,i] <- as.character( genes.cnv.exp.count.diff[,i] ) }}
+
+###Part IV. T statistics and adjusted df.
+genes.cnv.exp.count.diff <- genes.cnv.exp.count.diff  %>% mutate(diff = CNVloss.mean - diploid.mean, se = (CNVloss.var/CNVloss + diploid.var/diploid) ) %>% mutate(se = sqrt(se)) %>% mutate(t.value = diff/se) %>% mutate(R = (CNVloss.var/CNVloss)/(CNVloss.var/CNVloss + diploid.var/diploid)) %>% mutate(df = R*R/(CNVloss - 1) + (1 - R)*(1 - R)/(diploid - 1)) %>% mutate(df = 1/df)  %>% mutate(p.value = pt(q = t.value, df = df))   ###Remember it is downregulation now.
+
+genes.cnv.exp.count.diff.downregulation <- genes.cnv.exp.count.diff  %>% mutate( Hugo_Symbol = genename ) %>% select(genename, data, Hugo_Symbol, diploid, CNVloss, diploid.mean, CNVloss.mean, diploid.var, CNVloss.var, diff, se, t.value, R, df, p.value)  %>% na.omit()
+
+
+###Part V. Combining above t.test results and perform FDR test.
+genes.cnv.exp.test.fdr  <- function(dataset){
+
+genes.cnv.exp.test.all   = data.frame()
+
+for( j in unique( dataset$genename ) ){
+genes.cnv.exp.test.gene <- dataset %>% filter( genename == j )
+genes.cnv.exp.test.gene$qvalue  <- p.adjust( genes.cnv.exp.test.gene$p.value, method="fdr" )
+
+genes.cnv.exp.test.all   <- rbind.data.frame(genes.cnv.exp.test.all, genes.cnv.exp.test.gene)
+}
+return( genes.cnv.exp.test.all )
+}
+
+
+genes.cnv.exp.test.fdr.res <- genes.cnv.exp.test.fdr( rbind.data.frame(genes.cnv.exp.count.diff.upregulation, genes.cnv.exp.count.diff.downregulation) )
+
+
+###Part VI. Save data
+saveRDS( genes.cnv.exp.test.fdr.res, filename )
+print(paste(s, "finished", sep=" "))
+}
+}
+

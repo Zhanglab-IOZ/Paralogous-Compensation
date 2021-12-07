@@ -90,7 +90,7 @@ all.pair.cor.tissues$robust <- factor( all.pair.cor.tissues$robust, levels=c("Ro
 all.pair.cor.tissues.prenatal <- all.pair.cor.tissues
 
 m1 <- aggregate(all.pair.cor.tissues.prenatal$value, by=list(all.pair.cor.tissues.prenatal$tissue, all.pair.cor.tissues.prenatal$robust), median) %>% arrange(Group.1, Group.2) %>% rename(tissue=Group.1, robust=Group.2, correlation=x)
-p1 <- rbind.data.frame(m1, all.pair.cor.tissues.random.prenatal %>% select(tissue, correlation, robust) %>% arrange(tissue) ) %>% ggplot(aes(x=tissue, y=correlation, col=robust)) + geom_path(aes(group=robust)) +geom_point() + theme_bw() + theme(axis.title=element_text(size=20, face="bold"), axis.text.x=element_text(size=17), axis.text.y=element_text(size=17), legend.title=element_text(size=18, face="bold"), legend.text=element_text(size=17), strip.background = element_rect(fill = NA), strip.text=element_text(size=18), plot.tag=element_text(size=28, face="bold")) + xlab("Tissues") + ylab("Median expression correlation") + scale_color_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9", "Salmon3"), guide = guide_legend( title = "Negative GI type" ), labels=c("Core", "Conditional", "Others", "Random pairs" ))
+p1 <- rbind.data.frame(m1, all.pair.cor.tissues.random.prenatal %>% select(tissue, correlation, robust) %>% arrange(tissue) ) %>% ggplot(aes(x=tissue, y=correlation, col=robust)) + geom_path(aes(group=robust)) +geom_point() + theme_bw() + theme(axis.title=element_text(size=20, face="bold"), axis.text.x=element_text(size=17), axis.text.y=element_text(size=17), legend.title=element_text(size=18, face="bold"), legend.text=element_text(size=17), strip.background = element_rect(fill = NA), strip.text=element_text(size=18), plot.tag=element_text(size=28, face="bold")) + xlab("Tissues") + ylab("Median co-expression correlation") + scale_color_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9", "Salmon3"), guide = guide_legend( title = "Negative GI type" ), labels=c("Core", "Conditional", "Others", "Random pairs" ))
 
 
 
@@ -147,7 +147,7 @@ p3 <- s3 %>% rename(Tissues = tissue) %>% ggplot(aes(x=stage, y=correlation, gro
 s4 <- rbind.data.frame( rbind.data.frame(m1, all.pair.cor.tissues.random.prenatal %>% select(tissue, correlation, robust) %>% arrange(tissue) ) %>% mutate( development = "Prenatal" ), rbind.data.frame(m2, all.pair.cor.tissues.random.postnatal %>% select(tissue, correlation, robust) %>% arrange(tissue) ) %>% mutate( development = "Postnatal" ) )
 s4$development <- factor(s4$development, levels=c("Prenatal", "Postnatal"))
 
-p4 <- s4 %>% ggplot(aes(x=tissue, y=correlation, col=robust)) + geom_path(aes(group=robust)) +geom_point() + theme_bw() + theme(axis.title=element_text(size=20, face="bold"), axis.text.x=element_text(size=17), axis.text.y=element_text(size=17), legend.title=element_text(size=18, face="bold"), legend.text=element_text(size=17), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), plot.tag=element_text(size=28, face="bold")) + xlab("Tissues") + ylab("Median co-expression level") + scale_color_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9", "Salmon3"), guide = guide_legend( title = "Pair type" ), labels=c("Core negative GI", "Conditional negative GI", "Non-negative GI", "Random pairs" )) + facet_grid(~development, scale="free_x")
+p4 <- s4 %>% ggplot(aes(x=tissue, y=correlation, col=robust)) + geom_path(aes(group=robust)) +geom_point() + theme_bw() + theme(axis.title=element_text(size=20, face="bold"), axis.text.x=element_text(size=17), axis.text.y=element_text(size=17), legend.title=element_text(size=18, face="bold"), legend.text=element_text(size=17), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), plot.tag=element_text(size=28, face="bold")) + xlab("Tissues") + ylab("Median co-expression level") + scale_color_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9", "Salmon3"), guide = guide_legend( title = "Pair type" ), labels=c("Core negative GI (Duplicate pair)", "Conditional negative GI (Duplicate pair)", "Non-nGI (Duplicate pair)", "Random pairs" )) + facet_grid(~development, scale="free_x")
 
 
 ###Cases of correlation. Draw trends in development.
@@ -299,7 +299,7 @@ t3 <- readRDS("../datafiles/genome_cor_rank.postnatal.rds")
 t4.postnatal <- t3[duplicated(t3 %>% select(tissue, pair, robust)),]
 t5.postnatal <- t4.postnatal %>% select(pair,robust) %>% table() %>% as.data.frame() %>% filter(Freq > 0) %>% filter(robust == "Robust") %>% arrange( desc(Freq ))
 
-p.cor.tissue.prenatal <- t4.prenatal %>% select(pair,robust) %>% table() %>% as.data.frame() %>% filter(Freq > 0) %>% select(robust, Freq) %>% table() %>% as.data.frame() %>% rename(Cell=Freq, Freq=Freq.1) %>% filter(robust == "Robust") %>% ggplot() + geom_bar(aes(x=Cell, y=Freq), fill = "#7372B7", stat="identity") + theme_bw() + xlab("Number of co-expressed organs (prenatal)") + ylab("Duplicate pair number") + theme(axis.title=element_text(size=20, face="bold"), axis.text = element_text(size=17), legend.title=element_text(size=20, face="bold"), legend.text=element_text(size=18),  plot.tag=element_text(size=28, face="bold"), legend.position=c(0.8, 0.8) ) + geom_label(aes(x=Freq, y=Freq, label=pair), data = t5.prenatal %>% filter(Freq > 2), size=5.2)
+p.cor.tissue.prenatal <- t4.prenatal %>% select(pair,robust) %>% table() %>% as.data.frame() %>% filter(Freq > 0) %>% select(robust, Freq) %>% table() %>% as.data.frame() %>% rename(Cell=Freq, Freq=Freq.1) %>% filter(robust == "Robust") %>% ggplot() + geom_bar(aes(x=Cell, y=Freq), fill = "#7372B7", stat="identity") + theme_bw() + xlab("Number of co-expressed organs (prenatal)") + ylab("Number of duplicate pairs") + theme(axis.title=element_text(size=20, face="bold"), axis.text = element_text(size=17), legend.title=element_text(size=20, face="bold"), legend.text=element_text(size=18),  plot.tag=element_text(size=28, face="bold"), legend.position=c(0.8, 0.8) ) + geom_label(aes(x=Freq, y=Freq, label=pair), data = t5.prenatal %>% filter(Freq > 2), size=5.2)
 
 
 
@@ -309,7 +309,7 @@ dev.off()
 
 
 pdf("../FigureS4_Development.correlation.comparison.supplementary4_2021Oct.pdf", width=15, height=5.5)
-p4
+grid.arrange( p4, layout_matrix = matrix(1, nrow=1) )
 dev.off()
 
 
