@@ -293,7 +293,7 @@ grid.arrange(p.bioplex.Ours, p.bioplex.Dede, p.bioplex.Thomas, p.bioplex.Parrish
 
 
 ### A comparison file of negative GI rate
-s <- all.pair %>% select(pair, A549.gi, HT29.gi, OVCAR8.gi, PC9.gi, HeLa.gi, A375.gi, Mewo.gi, RPE1.gi, HCT116.gi, GM12878.gi) %>% melt( id.vars="pair" ) %>% select(variable, value) %>% table() %>% as.data.frame() %>% dcast(variable~value, value.var="Freq") %>% mutate(Total = N + Y) %>% mutate(ratio = Y/Total) %>% mutate( sd = sqrt(ratio * (1-ratio)/Total))
+s <- all.pair.gi %>% select(pair, A549.gi, HT29.gi, OVCAR8.gi, PC9.gi, HeLa.gi, A375.gi, Mewo.gi, RPE1.gi, HCT116.gi, GM12878.gi) %>% melt( id.vars="pair" ) %>% select(variable, value) %>% table() %>% as.data.frame() %>% dcast(variable~value, value.var="Freq") %>% mutate(Total = N + Y) %>% mutate(ratio = Y/Total) %>% mutate( sd = sqrt(ratio * (1-ratio)/Total))
 s$CellLine <- sub(".gi", "", s$variable )
 s$source <- c("Dede", "Dede", "Dede", "Parrish", "Parrish", "Thompson", "Thompson", "Thompson", "Ours", "Ours")
 
@@ -475,7 +475,7 @@ dev.off()
 
 ###Exploring function of neagative GI dupliate genes and robust negative GI duplicate pairs.
 
-p.combine.identity <- combine.pair.all %>% inner_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Conditional", "Others")), textsize=5.8, y_position=c(101, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Non-nGI" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity") + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
+p.combine.identity <- combine.pair.all %>% inner_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(101, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Non-nGI" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity") + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
 
 p.combine.bioplex  <- combine.pair.all %>% inner_join(bioplex.pair, by=c("pair" = "pair")) %>% mutate(Ratio = Shared/(Shared + Unique)) %>% inner_join(bioplex.size, by= c("gene1" = "genename")) %>% inner_join(bioplex.size, by=c("gene2" = "genename")) %>% filter(Size.x >=3, Size.y >=3) %>% ggplot(aes(x=type, y=Ratio)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(0.95, 1.04)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("PPI partner sharing ratio") + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(0, 1.1))
 
@@ -525,7 +525,7 @@ hcop.chicken <- read.table("../datafiles/human_chicken_hcop_fifteen_column.parse
 names( hcop.chicken ) <- c("human", "chicken")
 combine.pair.all.chicken <- combine.pair.all %>% inner_join( hcop.chicken, by=c("gene1" = "human") ) %>% inner_join( hcop.chicken, by=c("gene2" = "human") )
 
-p.combine.identity.chicken <- combine.pair.all.chicken %>% inner_join(ensembl.chicken, by=c("chicken.x" = "query", "chicken.y" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Conditional", "Others")), textsize=5.8, y_position=c(101, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
+p.combine.identity.chicken <- combine.pair.all.chicken %>% inner_join(ensembl.chicken, by=c("chicken.x" = "query", "chicken.y" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(101, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
 
 
 ###Chicken duplicate pairs. Expression level
@@ -566,7 +566,7 @@ k2 <- (combine.pair.all.WGD %>% filter(type %in% c("Robust", "Others") ) %>% sel
 
 p.combine.ohnologs  <- combine.pair.all.WGD %>% ggplot(aes(x=type,  y=ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=ratio-sd, ymax=ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of \nWGD pairs") +  geom_text(aes(x=type, y=y, label=label), data=combine.pair.all.WGD %>% mutate(y=0.98, label = paste(WGD, WGD + SSD, sep='/') ), size=5.8)  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
 
-p.combine.ohnologs.identity <- combine.pair.all %>% filter( pair %in% c(ohnologs$pair1, ohnologs$pair2 )) %>% inner_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(95, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Others" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity (WGD pairs)")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
+p.combine.ohnologs.identity <- combine.pair.all %>% filter( pair %in% c(ohnologs$pair1, ohnologs$pair2 )) %>% inner_join(ensembl, by=c("gene1" = "query", "gene2" = "target") ) %>% ggplot(aes(x=type, y=identity)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Robust", "Conditional"), c("Robust", "Others")), textsize=5.8, y_position=c(95, 105)) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9"), labels=c("Core", "Conditional", "Non-nGI" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Protein identity (WGD pairs)")  + scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI")) + ylim(c(20, 110))
 
 
 
@@ -581,34 +581,33 @@ tcga.loss      <- tcga.loss %>% inner_join(aggregate(tcga.loss$rank, by=list(tcg
 tcga.loss$data   <- factor(tcga.loss$data, levels=tcga.abbrev[,1])
 tcga.loss$Cancer <- factor(tcga.loss$Cancer,levels=tcga.abbrev[,2])
 
-compare.gi.loss <- compare.gi.gene %>% filter(gi == "Negative") %>% inner_join(tcga.loss, by=c("value"="genename"))
-Hart2.loss      <- Hart2.gene %>% filter(gi == "Negative") %>% inner_join(tcga.loss, by=c("value"="genename"))
-Parrish.loss     <- Parrish.gene %>% filter(gi == "Negative") %>% inner_join(tcga.loss, by=c("value"="genename"))
-Thompson.loss     <- Thompson.gene %>% filter(gi == "Negative") %>% inner_join(tcga.loss, by=c("value"="genename"))
 
-negative.gi.genes <- rbind.data.frame( compare.gi.loss %>% mutate(source="Ours"), Hart2.loss %>% mutate(source="Hart2"), Parrish.loss %>% mutate(source="Parrish"), Thompson.loss %>% mutate(source="Thompson"))
+all.pair <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F)
+all.pair <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
 
+GI.gene    <- all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+nonGI.gene <- all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
 
-###test of upregulation
-all.gi.loss.pair_1  <- rbind.data.frame( compare.gi.loss, Hart2.loss, Parrish.loss, Thompson.loss ) %>% filter(rank < 500 | ratio > 0.3) %>% select(data, Cancer, Freq, sum, ratio, rank, value) %>% unique() %>% inner_join( all.pair.gi %>% select(gene1, gene2), by=c("value"="gene1")) %>% rename(gene=gene2)
-all.gi.loss.pair_2  <- rbind.data.frame( compare.gi.loss, Hart2.loss, Parrish.loss, Thompson.loss ) %>% filter(rank < 500 | ratio > 0.3) %>% select(data, Cancer, Freq, sum, ratio, rank, value) %>% unique() %>% inner_join( all.pair.gi %>% select(gene1, gene2), by=c("value"="gene2")) %>% rename(gene=gene1)
+GI.gene.loss    <- tcga.loss %>%  filter(ratio > 0.3 | rank < 500) %>% filter(genename %in% GI.gene)
+nonGI.gene.loss <- tcga.loss %>%  filter(ratio > 0.3 | rank < 500) %>% filter(genename %in% nonGI.gene)
 
-all.cnv.exp.test.raw  <- read.csv("../datafiles/All.cnv.exp.test.csv", header=T, row.names=1)
-all.cnv.exp.test.raw  <- rbind.data.frame(all.gi.loss.pair_1 , all.gi.loss.pair_2) %>% inner_join(all.cnv.exp.test.raw, by=c("value" = "genename", "data"="data")) %>% mutate(Hugo_Symbol = gene) %>% mutate(gene = NULL)
+GI.gene.pair    <- rbind.data.frame(all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2, robust), all.pair %>% filter(Y > 0) %>% select(pair, gene2, gene1, robust) %>% rename(gene3 = gene2) %>% rename(gene2 = gene1) %>% rename(gene1 = gene3) ) %>% unique()
+nonGI.gene.pair <- rbind.data.frame(all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2, robust), all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene2, gene1, robust) %>% rename(gene3 = gene2) %>% rename(gene2 = gene1) %>% rename(gene1 = gene3) ) %>% unique()
 
-
-###A final summary table. GI status in each cell lines are included.
-all.cnv.exp.test  <- all.cnv.exp.test.raw  %>% select(value, data, Cancer, sum, Freq, ratio, rank, diff.self, qvalue.self, qvalue, Hugo_Symbol) %>% filter(qvalue.self < 0.001) %>% na.omit()
-all.cnv.exp.test  <- rbind.data.frame(all.cnv.exp.test %>% inner_join(all.pair.gi, by=c("value" = "gene1", "Hugo_Symbol" = "gene2")), all.cnv.exp.test %>% inner_join(all.pair.gi, by=c("value" = "gene2", "Hugo_Symbol" = "gene1")) )
-all.cnv.exp.test %>% dim()
-
-robust.cnv.exp.test <- all.cnv.exp.test %>% filter( pair %in% robust.pair.gi$pair )
-robust.cnv.exp.test %>% dim()
+write.csv( all.pair %>% filter(N >= 4, Y==0) %>% select( gene1, gene2, pair) %>% arrange(pair), "../TableS9_inset_non_nGI.sampling.csv")
 
 
-###Two genes of a pair are frequently lossed in cancer.
-robust.cnv.exp.test.double <- robust.cnv.exp.test %>% select(value, pair) %>% unique() %>% select( pair ) %>% table() %>% as.data.frame() %>% filter(Freq > 1)
-write.csv(robust.pair.gi %>% select( gene1, gene2, pair) %>% filter( pair %in% robust.cnv.exp.test.double[,1] ) %>% arrange(pair), "../TableS9_inset_Robust.two.loss.csv")
+###For robust pairs. The start number.
+tcga.loss %>%  filter(ratio > 0.3 | rank < 500) %>% filter(genename %in% c(robust.pair.gi$gene1, robust.pair.gi$gene2) ) %>% nrow()
+
+
+###test of upregulation. 
+all.cnv.exp.test.raw  <- read.csv("../datafiles/All.genes.cnv.exp.test.combine.final.csv", header=T, row.names=1, stringsAsFactors = F)
+
+all.cnv.exp.test      <- rbind.data.frame( GI.gene.loss, nonGI.gene.loss ) %>% unique() %>% inner_join( all.cnv.exp.test.raw, by=c("genename", "data") )  %>% select(genename, data, Cancer, sum, Freq, ratio, rank, diff.self, qvalue.self, qvalue, Hugo_Symbol, pair, robust) %>% filter(qvalue.self < 0.001)
+all.cnv.exp.test      <- all.cnv.exp.test %>% mutate( upregulation = ifelse(qvalue < 0.05, "Y", "N") )
+
+robust.cnv.exp.test   <- all.cnv.exp.test %>% filter( robust == "Robust" )
 
 
 ###DGIdb database annotation.
@@ -630,93 +629,73 @@ robust.cnv.exp.test$dgidb_type[is.na(robust.cnv.exp.test$dgidb_type)] <- "N_Anno
 ###Robust cases of CNV loss. draw heatmap plot. Only active compensation cases are listed.
 robust.cnv.exp.test.cancer.count <- robust.cnv.exp.test %>% select(data)  %>% table() %>% as.data.frame() %>% filter(Freq > 0) %>% arrange(desc(Freq)) %>% mutate(Freq = NULL) %>% unlist() %>% as.character()
 
-robust.cnv.exp.test.parsed       <- robust.cnv.exp.test %>% select(value, data, qvalue, Hugo_Symbol, pair, dgidb_type)
-robust.cnv.exp.test.parsed$upregulation <- "N"
-robust.cnv.exp.test.parsed$upregulation[robust.cnv.exp.test.parsed$qvalue < 0.05] <- "Y"
+robust.cnv.exp.test.parsed       <- robust.cnv.exp.test %>% select(genename, data, qvalue, Hugo_Symbol, pair, upregulation, dgidb_type)
 robust.cnv.exp.test.parsed$data         <- factor(robust.cnv.exp.test.parsed$data,  levels = robust.cnv.exp.test.cancer.count ) 
 robust.cnv.exp.test.parsed$dgidb_type   <- factor(robust.cnv.exp.test.parsed$dgidb_type, levels = c("Existed", "Druggable", "N_Annotated") )
 robust.cnv.exp.test.parsed$upregulation <- factor(robust.cnv.exp.test.parsed$upregulation,  levels = c("Y", "N"))
 
-active.gene   <- robust.cnv.exp.test.parsed %>% filter( upregulation == "Y" ) %>% select(value) %>% unique() %>% unlist() %>% as.character()
+active.gene   <- robust.cnv.exp.test.parsed %>% filter( upregulation == "Y" ) %>% select(genename) %>% unique() %>% unlist() %>% as.character()
 
-robust.cnv.exp.test.parsed.active       <- robust.cnv.exp.test.parsed %>% filter(value %in% active.gene)
-robust.cnv.exp.test.parsed.active.freq  <- robust.cnv.exp.test.parsed.active %>% select(value, pair) %>% table() %>% as.data.frame() %>% filter(Freq > 0)
+robust.cnv.exp.test.parsed.active       <- robust.cnv.exp.test.parsed %>% filter(genename %in% active.gene)
+robust.cnv.exp.test.parsed.active.freq  <- robust.cnv.exp.test.parsed.active %>% select(genename, pair) %>% table() %>% as.data.frame() %>% filter(Freq > 0)
 
-robust.cnv.exp.test.parsed.active.freq  <- robust.cnv.exp.test.parsed.active.freq  %>% inner_join(aggregate(robust.cnv.exp.test.parsed.active.freq$Freq, by=list(robust.cnv.exp.test.parsed.active.freq$pair), max), by=c("pair" = "Group.1") ) %>% rename(max=x) %>% arrange(desc(max), pair, desc(Freq)) %>% select(value) %>% unlist() %>% as.character()
+robust.cnv.exp.test.parsed.active.freq  <- robust.cnv.exp.test.parsed.active.freq  %>% inner_join(aggregate(robust.cnv.exp.test.parsed.active.freq$Freq, by=list(robust.cnv.exp.test.parsed.active.freq$pair), max), by=c("pair" = "Group.1") ) %>% rename(max=x) %>% arrange(desc(max), pair, desc(Freq)) %>% select(genename) %>% unlist() %>% as.character()
 
-robust.cnv.exp.test.parsed.active$value  <- factor(robust.cnv.exp.test.parsed.active$value, levels = robust.cnv.exp.test.parsed.active.freq %>% rev() )
-robust.cnv.exp.test.parsed.active        <- robust.cnv.exp.test.parsed.active %>% arrange(value)
+robust.cnv.exp.test.parsed.active$genename  <- factor(robust.cnv.exp.test.parsed.active$genename, levels = robust.cnv.exp.test.parsed.active.freq %>% rev() )
+robust.cnv.exp.test.parsed.active           <- robust.cnv.exp.test.parsed.active %>% arrange(genename)
 robust.cnv.exp.test.parsed.active$Hugo_Symbol  <- factor(robust.cnv.exp.test.parsed.active$Hugo_Symbol, levels = unique(robust.cnv.exp.test.parsed.active$Hugo_Symbol) )
 
-p.robust.case <- robust.cnv.exp.test.parsed.active  %>% ggplot() + geom_point(aes(x=data, y=value, size=I(5), col=upregulation) ) + theme_bw() + theme(axis.title.x=element_text(face="bold",size=20), axis.title.y=element_text(face="bold",size=20), axis.text.x=element_text(size=20), axis.text.y=element_text(size=20), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20),  plot.tag=element_text(size=28, face="bold"), legend.position="bottom") + scale_x_discrete(position="top") + xlab("TCGA cancer types") + ylab("Duplicate genes") + scale_color_manual( values=c("#D76D55", "grey70"), guide = guide_legend(title = "Potentially active\n compensation of\n paralogous gene "), labels=c("Yes", "No"))
+p.robust.case <- robust.cnv.exp.test.parsed.active  %>% ggplot() + geom_point(aes(x=data, y=genename, size=I(5), col=upregulation) ) + theme_bw() + theme(axis.title.x=element_text(face="bold",size=20), axis.title.y=element_text(face="bold",size=20), axis.text.x=element_text(size=20), axis.text.y=element_text(size=20), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20),  plot.tag=element_text(size=28, face="bold"), legend.position="bottom") + scale_x_discrete(position="top") + xlab("TCGA cancer types") + ylab("Duplicate genes") + scale_color_manual( values=c("#D76D55", "grey70"), guide = guide_legend(title = "Potentially active\n compensation of\n paralogous gene "), labels=c("Yes", "No"))
 
-p.robust.drug <- robust.cnv.exp.test.parsed.active %>% select(value, Hugo_Symbol, dgidb_type) %>% unique() %>% arrange(value) %>% ggplot() + geom_tile(aes(x=factor(1), y=Hugo_Symbol, fill=dgidb_type)) + theme_bw() + theme(axis.title.x=element_text(size=20, face="bold"), axis.title.y=element_blank(), axis.text.x=element_text(size=20), axis.text.y=element_text(size=20), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20), plot.tag=element_text(size=28, face="bold")) + scale_x_discrete(position="top") + xlab("Paralogous gene's druggablility") + ylab("") + scale_fill_manual( values=c("#368DD1", "#96CEFB", "#F9C750"), guide = guide_legend(title = "DGIdb druggable annotation", title.position = "top",nrow=3), labels=c("Existed drug-gene interactions", "Potentially druggable", "Not annotated"))
+p.robust.drug <- robust.cnv.exp.test.parsed.active %>% select(genename, Hugo_Symbol, dgidb_type) %>% unique() %>% arrange(genename) %>% ggplot() + geom_tile(aes(x=factor(1), y=Hugo_Symbol, fill=dgidb_type)) + theme_bw() + theme(axis.title.x=element_text(size=20, face="bold"), axis.title.y=element_blank(), axis.text.x=element_text(size=20), axis.text.y=element_text(size=20), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20), plot.tag=element_text(size=28, face="bold")) + scale_x_discrete(position="top") + xlab("Paralogous gene's druggablility") + ylab("") + scale_fill_manual( values=c("#368DD1", "#96CEFB", "#F9C750"), guide = guide_legend(title = "DGIdb druggable annotation", title.position = "top",nrow=3), labels=c("Existed drug-gene interactions", "Potentially druggable", "Not annotated"))
 
 
 ###Gene level summary of adaptive upregulation. Bar plot, only active cases are showed.
-robust.cnv.exp.test.cancer.active  <- robust.cnv.exp.test.parsed %>% filter(value %in% active.gene)  %>% select(value, upregulation) %>% table() %>% as.data.frame() %>% filter(Freq > 0)
+robust.cnv.exp.test.cancer.active  <- robust.cnv.exp.test.parsed %>% filter(genename %in% active.gene)  %>% select(genename, upregulation) %>% table() %>% as.data.frame() %>% filter(Freq > 0)
 
 robust.cnv.exp.test.cancer.active$upregulation <- factor(robust.cnv.exp.test.cancer.active$upregulation, levels=c("N", "Y"))
-robust.cnv.exp.test.cancer.active$value <- factor(robust.cnv.exp.test.cancer.active$value, levels = robust.cnv.exp.test.parsed.active.freq %>% rev() )
+robust.cnv.exp.test.cancer.active$genename <- factor(robust.cnv.exp.test.cancer.active$genename, levels = robust.cnv.exp.test.parsed.active.freq %>% rev() )
 
-p.robust.active.number <- robust.cnv.exp.test.cancer.active %>% ggplot() + geom_bar(aes(y=value, x=Freq, fill=upregulation), stat="identity", width=0.6) + theme_bw() + theme(axis.title.x=element_text(size=20, face="bold"), axis.title.y=element_blank(), axis.ticks.y=element_blank(), axis.text.x=element_text(size=20), axis.text.y=element_blank(), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), plot.tag=element_text(size=28, face="bold"), legend.position="bottom" ) + scale_fill_manual( values=c("grey70", "#D76D55"), guide = guide_legend(title = "Potentially active\n compensation of\n paralogous gene "), labels=c("No", "Yes")) + scale_x_continuous(breaks=c(0:6 * 2), labels=c(0:6 * 2), position="top") + xlab("Number of cases")
+p.robust.active.number <- robust.cnv.exp.test.cancer.active %>% ggplot() + geom_bar(aes(y=genename, x=Freq, fill=upregulation), stat="identity", width=0.6) + theme_bw() + theme(axis.title.x=element_text(size=20, face="bold"), axis.title.y=element_blank(), axis.ticks.y=element_blank(), axis.text.x=element_text(size=20), axis.text.y=element_blank(), legend.title=element_text(face="bold",size=20), legend.text=element_text(size=20), strip.background = element_rect(fill = NA), strip.text=element_text(size=20), plot.tag=element_text(size=28, face="bold"), legend.position="bottom" ) + scale_fill_manual( values=c("grey70", "#D76D55"), guide = guide_legend(title = "Potentially active\n compensation of\n paralogous gene "), labels=c("No", "Yes")) + scale_x_continuous(breaks=c(0:6 * 2), labels=c(0:6 * 2), position="top") + xlab("Number of cases")
 
 p.robust.active.distribution <- robust.cnv.exp.test.cancer.active  %>% rename(number = Freq) %>% select( upregulation, number) %>% table() %>% as.data.frame() %>% filter( upregulation == "Y", Freq > 0) %>% ggplot(aes(x=number, y=Freq)) + geom_bar(stat="identity", width=0.8) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Number of \npotential active compensation") + ylab("Frequency") 
 
-p.robust.active.proportion   <- robust.cnv.exp.test.cancer.active  %>% filter(  upregulation == "Y") %>% inner_join( aggregate(robust.cnv.exp.test.cancer.active$Freq, by=list(robust.cnv.exp.test.cancer.active$value), sum), by=c("value" = "Group.1") ) %>% mutate( ratio = Freq/x ) %>% ggplot( aes(x=ratio) ) + geom_histogram(fill="#D76D55", col="black", binwidth = 0.1 ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Proportion of \npotential active compensation") + ylab("Frequency") + scale_x_continuous(breaks = (0:2)/2, labels = (0:2)/2)
+p.robust.active.proportion   <- robust.cnv.exp.test.cancer.active  %>% filter(  upregulation == "Y") %>% inner_join( aggregate(robust.cnv.exp.test.cancer.active$Freq, by=list(robust.cnv.exp.test.cancer.active$genename), sum), by=c("genename" = "Group.1") ) %>% mutate( ratio = Freq/x ) %>% ggplot( aes(x=ratio) ) + geom_histogram(fill="#D76D55", col="black", binwidth = 0.1 ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=18), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Proportion of \npotential active compensation") + ylab("Frequency") + scale_x_continuous(breaks = (0:2)/2, labels = (0:2)/2)
 
 
-###Duplicate pairs without negative GI. Choose some. Preparing files.
-all.pair.others <- all.pair.gi %>% filter(report == "novel") %>% select(pair, HCT116.gi, GM12878.gi, A549.gi, HT29.gi, OVCAR8.gi, PC9.gi, HeLa.gi) %>% melt(id.var = "pair") %>% rename(gi = value) %>% select(pair, gi) %>% table() %>% as.data.frame() %>% dcast(pair~gi,value.var="Freq") %>% filter(Y == 0) %>% arrange(desc(N)) %>% filter(N >= 4)
-all.pair.others <- all.pair.others %>% filter(N >=4 ) %>% select(pair) %>% inner_join(all.pair.gi, by=c("pair"))
-all.pair.others <- all.pair.others[seq(1, nrow(all.pair.others), by=2), ]
-
-all.pair.others.gene <-  all.pair.others %>% select(pair, gene1, gene2) %>% melt(id.var = "pair") %>% select(pair, value) %>% mutate(pair = "others") %>% rename(gi = pair) %>% unique()
-all.pair.others.loss <-  all.pair.others.gene %>% inner_join(tcga.loss, by=c("value"="genename"))
-
-
-###Active compensation for duplicate pairs withour negative GI.
-Others.cnv.exp.test  <- read.csv("../datafiles/Others.cnv.exp.test.csv", header=T, row.names=1, stringsAsFactors = F)
-Others.cnv.exp.test  <- Others.cnv.exp.test %>% filter(qvalue.self < 0.001) %>% rename(value = genename) %>% na.omit()
+###Duplicate pairs that are involved in robust cases.
+robust.cnv.exp.test.double <- robust.cnv.exp.test.parsed.active %>% arrange( desc(genename) ) %>% select(pair) %>% unique() %>% inner_join( all.pair %>% select(gene1, gene2, pair), by="pair") %>% unique() %>% select(gene1, gene2, pair)
+write.csv( robust.cnv.exp.test.double, "../TableS9_inset_Robust.two.loss.csv")
 
 
 ###Combinging active compensation results for duplicate pairs with different categories
-k0 <- rbind.data.frame(all.cnv.exp.test  %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) , Others.cnv.exp.test %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) ) %>% mutate(compensation = ifelse(qvalue < 0.05, "active", "passive")) %>% inner_join( combine.pair.all, by="pair" ) %>% select( type, compensation ) %>% table() %>% as.data.frame() %>% dcast( type ~ compensation, value.var="Freq") %>% mutate(Total = active + passive) %>% mutate(Ratio = active/Total) %>% mutate(sd=sqrt(Ratio/Total))
-k0$type <- factor(k0$type, levels=c("Robust", "Conditional", "Others"))
+k0 <-  all.cnv.exp.test %>% select( robust, upregulation ) %>% table() %>% as.data.frame() %>% dcast( robust ~ upregulation, value.var="Freq") %>% mutate(Total = N + Y) %>% mutate(Ratio = Y/Total) %>% mutate(sd=sqrt(Ratio/Total))
+k0$robust <- factor(k0$robust, levels=c("Robust", "Conditional", "Others"))
 
-s1 <- (k0 %>% filter(type %in% c("Robust", "Conditional") ) %>% select(active, passive) %>% fisher.test())$p.value %>% format(digits=2)
-s2 <- (k0 %>% filter(type %in% c("Robust", "Others") ) %>% select(active, passive) %>% fisher.test())$p.value %>% format(digits=2)
-s3 <- (k0 %>% filter(type %in% c("Conditional", "Others") ) %>% select(active, passive) %>% fisher.test())$p.value %>% format(digits=2)
-
-
-write.csv(rbind.data.frame(all.cnv.exp.test  %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) , Others.cnv.exp.test %>% select(value, data, Hugo_Symbol, pair, qvalue.self, qvalue ) ) %>% mutate(compensation = ifelse(qvalue < 0.05, "active", "passive")) %>% inner_join( combine.pair.all %>% select(gene1, gene2, pair, type) , by="pair" ) %>% arrange(type, pair, value, data) %>% inner_join( tcga.loss, by=c("value" = "genename", "data" = "data") ), "../TableS9_combine.pair.cnv.exp.test.csv" )
+s1 <- (k0 %>% filter(robust %in% c("Robust", "Conditional") ) %>% select(N, Y) %>% fisher.test())$p.value %>% format(digits=2)
+s2 <- (k0 %>% filter(robust %in% c("Robust", "Others") )      %>% select(N, Y) %>% fisher.test())$p.value %>% format(digits=2)
+s3 <- (k0 %>% filter(robust %in% c("Conditional", "Others") ) %>% select(N, Y) %>% fisher.test())$p.value %>% format(digits=2)
 
 
-
-###Upregulation for random gene pairs.
-#raw.cnv.Others.gi <- readRDS("../datafiles/gi.genes.cnv.exp.test.Others.Final.rds")   ###Two big a file!
-#raw.cnv.Others.gi <- raw.cnv.Others.gi %>% filter( genename == Hugo_Symbol ) %>% filter(qvalue <= 0.001) %>% select(genename, data, source, p.value, qvalue) %>% rename(p.value.self = p.value, qvalue.self = qvalue ) %>% inner_join( raw.cnv.Others.gi %>% filter( genename != Hugo_Symbol ), by=c("genename", "data", "source" ) ) %>% mutate( upregulation = ifelse(qvalue < 0.05, "Y", "N") )
-#raw.cnv.Others.gi %>% select( upregulation ) %>% table()
-#       N        Y 
-#12941715   955220 
-
-#raw.cnv.pairs.gi <- readRDS("../datafiles/gi.genes.cnv.exp.test.combine.Final.rds")
-#raw.cnv.pairs.gi <- raw.cnv.pairs.gi   %>% filter( genename == Hugo_Symbol ) %>% filter(qvalue <= 0.001) %>% select(genename, data, p.value, qvalue) %>% rename(p.value.self = #p.value, qvalue.self = qvalue ) %>% inner_join( raw.cnv.pairs.gi %>% filter( genename != Hugo_Symbol ), by=c("genename", "data") )%>% mutate( upregulation = ifelse(qvalue < 0.05, "Y", "N") )
-#raw.cnv.pairs.gi %>% select( upregulation ) %>% table()
-#       N        Y 
-#21910652  1635769
-s.random <- (955220 + 1635769)/(955220 + 1635769 + 12941715 + 21910652)
-
-binom.test(83, 654, p = s.random)
-binom.test(54, 574, p = s.random)
-binom.test(61, 712, p = s.random)
+write.csv( rbind.data.frame( all.cnv.exp.test %>% select(genename, data, sum, ratio, rank, qvalue.self, Hugo_Symbol, qvalue, upregulation, pair, robust) %>% arrange(pair, genename, data) %>% filter( robust == "Robust" ) %>% mutate(robust = "Core"), all.cnv.exp.test %>% select(genename, data, sum, ratio, rank, qvalue.self, Hugo_Symbol, qvalue, upregulation, pair, robust) %>% arrange(pair, genename, data) %>% filter( robust == "Conditional" ), all.cnv.exp.test %>% select(genename, data, sum, ratio, rank, qvalue.self, Hugo_Symbol, qvalue, upregulation, pair, robust) %>% arrange(pair, genename, data) %>% filter( robust == "Others" ) %>% mutate(robust = "non-nGI") ),  "../TableS9_combine.pair.cnv.exp.test.csv" )
 
 
-p.active.ratio <- k0 %>% ggplot(aes(x=type,  y=Ratio)) + geom_bar(aes(fill = type), stat="identity") + geom_errorbar(aes(ymin=Ratio-sd, ymax=Ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=23, face="bold"), axis.text=element_text(size=21), legend.text=element_text(size=21), plot.title=element_text(size=23, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of pairs \ncompatible with active compensation") + geom_text(aes(x=type, y=ypos, label=label), data=(k0 %>% mutate(ypos=0.38, label=paste(active, Total, sep="/"))), size=6.5) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.26, label=s1), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.24, 0.25, 0.25, 0.24)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.0, y=0.31, label=s2), size=5.8) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 3, 3), "y"=c(0.29, 0.30, 0.30, 0.29)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.5, y=0.21, label=s3), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(2, 2, 3, 3), "y"=c(0.19, 0.20, 0.20, 0.19)), lwd=0.7) + geom_hline(yintercept=s.random, lty="dashed") +  scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
+
+###Random expectation-Upregulation of random genes.
+#raw.cnv.Others.gi <- readRDS("../datafiles/All.genes.cnv.exp.test.Final.random.rds")   ###Too huge a file is!
+s.random <-  4310821/61421793
+
+b1 <- binom.test( subset(k0, k0$robust == "Robust")$Y, subset(k0, k0$robust == "Robust")$Total, p = s.random)$p.value
+b2 <- binom.test( subset(k0, k0$robust == "Conditional")$Y, subset(k0, k0$robust == "Conditional")$Total,  p = s.random)$p.value
+b3 <- binom.test( subset(k0, k0$robust == "Others")$Y, subset(k0, k0$robust == "Others")$Total, p = s.random)$p.value
+random.binom <- data.frame( robust = c("Robust", "Conditional", "Others"), binom = c(b1, b2, b3) ) %>% mutate( sig = ifelse(binom < 0.05, "*", "N.S.")  ) %>% mutate( sig = ifelse(binom < 0.01, "**", sig) ) %>% mutate( sig = ifelse(binom < 0.001, "***", sig) )
 
 
-pdf("../Figure5B_Probability.active_2021Oct.pdf", width=9, height=7)
-grid.arrange( p.active.ratio + labs(tag = "B"), layout_matrix = matrix(1, nrow=1) )
+p.active.ratio <- k0 %>% ggplot(aes(x=robust,  y=Ratio)) + geom_bar(aes(fill = robust), stat="identity") + geom_errorbar(aes(ymin=Ratio-sd, ymax=Ratio+sd), width=0.3) + scale_fill_manual(values=c("#7372B7", "#F2CA66", "#3BA6D9")) + theme_bw() + theme(title=element_text(size=23, face="bold"), axis.text=element_text(size=21), legend.text=element_text(size=21), plot.title=element_text(size=23, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Proportion of pairs compatible \n with active compensation") + geom_text(aes(x=robust, y=ypos, label=label), data=( k0 %>% inner_join( random.binom, by=c("robust") ) %>% mutate( label=paste(Y, "/", Total, " (", sig, ")", sep='') ) %>% mutate(ypos=0.37) ), size=6.5) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=1.5, y=0.26, label=s1), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 2, 2), "y"=c(0.24, 0.25, 0.25, 0.24)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.0, y=0.31, label=s2), size=5.8) + geom_path(aes(x=x, y=y), data= data.frame("x"=c(1, 1, 3, 3), "y"=c(0.29, 0.30, 0.30, 0.29)), lwd=0.7) + geom_text(aes(x=x, y=y, label=label), data=data.frame(x=2.5, y=0.21, label=s3), size=5.8)+ geom_path(aes(x=x, y=y), data= data.frame("x"=c(2, 2, 3, 3), "y"=c(0.19, 0.20, 0.20, 0.19)), lwd=0.7) + geom_hline(yintercept=s.random, lty="dashed") +  scale_x_discrete(labels=c("Core", "Conditional", "Non-nGI"))
+
+
+pdf("../Figure5A_Probability.active_2021Oct.pdf", width=9, height=7)
+grid.arrange( p.active.ratio + labs(tag = "A"), layout_matrix = matrix(1, nrow=1) )
 dev.off()
 
 pdf("../Figure5C_inset_robust.cnv.tcga.active.compensation.proportion_2021Oct.pdf", width=2.5, height=3)
@@ -768,9 +747,9 @@ grid.arrange(  p.combine.branch + labs(tag="A"),  p.GO.BP + labs(tag="B"), p.com
 dev.off()
 
 
-pdf("../FigureS6_Robust.gi.Features.identity.supplementary6_2021Oct.pdf", width=18, height=18)
+pdf("../FigureS6_Robust.gi.Features.identity.supplementary6_2021Oct.pdf", width=20, height=18)
 grid.arrange(  p.combine.ohnologs + labs(tag="A"),  p.GO.CC + labs(tag="C"),
- p.combine.expression.tau.postnatal + labs(tag="B"),p.combine.expression.tau.tissue + labs(tag="B"),   p.combine.expression.level.postnatal + labs(tag="B"),  p.combine.expression.tau.chicken.postnatal + labs(tag="B"), p.combine.expression.tau.tissue.chicken + labs(tag="B"),   p.combine.expression.level.chicken.postnatal + labs(tag="B"), layout_matrix = matrix( rep(1:8,c(3,3,2,2,2,2,2,2)), nrow=3, byrow=T) )
+ p.combine.expression.tau.tissue + labs(tag="B"), p.combine.expression.tau.postnatal + labs(tag="B"),  p.combine.expression.tau.postnatal.tissue + labs(tag="B"),  p.combine.expression.level.postnatal + labs(tag="B"),  p.combine.expression.tau.tissue.chicken + labs(tag="B"), p.combine.expression.tau.chicken.postnatal + labs(tag="B"), p.combine.expression.tau.tissue.chicken.postnatal + labs(tag="B"),   p.combine.expression.level.chicken.postnatal + labs(tag="B"), layout_matrix = matrix( rep(1:10,c(4,4,2,2,2,2,2,2,2,2)), nrow=3, byrow=T) )
 dev.off()
 
 
