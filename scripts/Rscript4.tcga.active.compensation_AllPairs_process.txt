@@ -1,0 +1,67 @@
+library(dplyr);library(reshape2)
+
+
+###gene pairs to be focused on
+all.pair <- read.csv("all.pair.gi.csv", stringsAsFactors=F)
+all.pair <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
+
+GI.gene    <- all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+nonGI.gene <- all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+
+GI.gene.pair <- rbind.data.frame(all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2, robust), all.pair %>% filter(Y > 0) %>% select(pair, gene2, gene1, robust) %>% rename(gene3 = gene2) %>% rename(gene2 = gene1) %>% rename(gene1 = gene3) ) %>% unique()
+nonGI.gene.pair <- rbind.data.frame(all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2, robust), all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene2, gene1, robust) %>% rename(gene3 = gene2) %>% rename(gene2 = gene1) %>% rename(gene1 = gene3) ) %>% unique()
+
+
+###Part 1. Read processed files. Combining differ cancer types.
+GI.genes.cnv.exp.test.combine.final  = data.frame()[as.numeric(0),]
+GI.genes.cnv.exp.test.combine.random = data.frame()[as.numeric(0),]
+for(i in grep("^GI.genes.*rds", list.files(), value = T)){
+
+datafile      <- readRDS( i )
+datafile.pair <- datafile %>% inner_join( GI.gene.pair,  by=c("genename" = "gene1", Hugo_Symbol = "gene2"))
+datafile.pair <- datafile %>% filter(genename == Hugo_Symbol) %>% mutate(diff = CNVloss.mean - diploid.mean) %>% select(genename, data, diff, p.value, qvalue) %>% rename(diff.self = diff, p.value.self = p.value, qvalue.self = qvalue) %>% inner_join( datafile.pair, by=c("genename", "data")) %>% na.omit()
+
+GI.genes.cnv.exp.test.combine.final <- rbind.data.frame( GI.genes.cnv.exp.test.combine.final, datafile.pair )
+
+
+###Random expectation
+datafile.random <- datafile %>% filter(genename == Hugo_Symbol) %>% mutate(diff = CNVloss.mean - diploid.mean) %>% select(genename, data, diff, p.value, qvalue) %>% rename(diff.self = diff, p.value.self = p.value, qvalue.self = qvalue) %>% filter(qvalue.self < 0.001) %>% inner_join( datafile %>% select(genename, data, Hugo_Symbol, diff, p.value, qvalue), by=c("genename", "data") ) %>% na.omit()
+
+GI.genes.cnv.exp.test.combine.random <- rbind.data.frame( GI.genes.cnv.exp.test.combine.random, datafile.random )
+
+
+print( paste(i, " finished", sep='') )
+}
+
+
+###Part 2. Read processed files. Combining differ cancer types.
+nonGI.genes.cnv.exp.test.combine.final  = data.frame()[as.numeric(0),]
+nonGI.genes.cnv.exp.test.combine.random = data.frame()[as.numeric(0),]
+for(i in grep("^nonGI.genes.*rds", list.files(), value = T)){
+
+datafile      <- readRDS( i )
+datafile.pair <- datafile %>% inner_join( nonGI.gene.pair,  by=c("genename" = "gene1", Hugo_Symbol = "gene2"))
+datafile.pair <- datafile %>% filter(genename == Hugo_Symbol) %>% mutate(diff = CNVloss.mean - diploid.mean) %>% select(genename, data, diff, p.value, qvalue) %>% rename(diff.self = diff, p.value.self = p.value, qvalue.self = qvalue) %>% inner_join( datafile.pair, by=c("genename", "data")) %>% na.omit()
+
+nonGI.genes.cnv.exp.test.combine.final <- rbind.data.frame( nonGI.genes.cnv.exp.test.combine.final, datafile.pair )
+
+
+###Random expectation
+datafile.random <- datafile %>% filter(genename == Hugo_Symbol) %>% mutate(diff = CNVloss.mean - diploid.mean) %>% select(genename, data, diff, p.value, qvalue) %>% rename(diff.self = diff, p.value.self = p.value, qvalue.self = qvalue) %>% filter(qvalue.self < 0.001) %>% inner_join( datafile %>% select(genename, data, Hugo_Symbol, diff, p.value, qvalue), by=c("genename", "data") ) %>% na.omit()
+
+nonGI.genes.cnv.exp.test.combine.random <- rbind.data.frame( nonGI.genes.cnv.exp.test.combine.random, datafile.random )
+
+print( paste(i, " finished", sep='') )
+}
+
+
+###Save data
+write.csv( rbind.data.frame( GI.genes.cnv.exp.test.combine.final, nonGI.genes.cnv.exp.test.combine.final), "All.genes.cnv.exp.test.combine.final.csv" )
+saveRDS( rbind.data.frame(GI.genes.cnv.exp.test.combine.random, nonGI.genes.cnv.exp.test.combine.random), "All.genes.cnv.exp.test.Final.random.rds" )
+
+
+#rbind.data.frame(GI.genes.cnv.exp.test.combine.random, nonGI.genes.cnv.exp.test.combine.random) %>% filter(qvalue < 0.05) %>% dim()
+#[1] 4310821       9
+#rbind.data.frame(GI.genes.cnv.exp.test.combine.random, nonGI.genes.cnv.exp.test.combine.random) %>% dim()
+#[1] 61421793        9
+#s.random <-  4310821/61421793
