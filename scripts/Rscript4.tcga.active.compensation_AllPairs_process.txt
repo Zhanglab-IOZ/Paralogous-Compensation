@@ -2,7 +2,7 @@ library(dplyr);library(reshape2)
 
 
 ###gene pairs to be focused on
-all.pair <- read.csv("all.pair.gi.csv", stringsAsFactors=F)
+all.pair <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F)
 all.pair <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
 
 GI.gene    <- all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()

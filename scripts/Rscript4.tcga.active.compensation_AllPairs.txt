@@ -2,7 +2,7 @@ library(dplyr);library(reshape2)
 
 
 ###gene pairs to be focused on
-all.pair <- read.csv("all.pair.gi.csv", stringsAsFactors=F)
+all.pair <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F)
 all.pair <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
 
 GI.gene    <- all.pair %>% filter(Y > 0) %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
@@ -10,13 +10,13 @@ nonGI.gene <- all.pair %>% filter(N >= 4, Y==0) %>% select(pair, gene1, gene2) %
 
 
 ###TCGA. Raw data
-tcga.exp <- readRDS( "tcga.cBioportal.exp.rds" )
-tcga.cnv <- readRDS( "tcga.cBioportal.cnv.rds" )
+tcga.exp <- readRDS( "../datafiles/tcga.cBioportal.exp.rds" )
+tcga.cnv <- readRDS( "../datafiles/tcga.cBioportal.cnv.rds" )
 
 
 ###CNV loss of GISTIC all data. CNV loss of high frequency
-tcga.cnv.freq <- readRDS( "TCGA.cnv.cBioportal.rds" )
-tcga.abbrev   <- read.table("TCGA.abbreviation.txt",sep="\t")
+tcga.cnv.freq <- readRDS( "../datafiles/TCGA.cnv.cBioportal.rds" )
+tcga.abbrev   <- read.table("../datafiles/TCGA.abbreviation.txt",sep="\t")
 
 tcga.cnv.freq  <- tcga.cnv.freq %>% inner_join(tcga.abbrev, by=c("data" = "V1")) %>% rename(Cancer = V2)
 tcga.loss      <- tcga.cnv.freq %>% filter(cnv == "-1") %>% inner_join( tcga.cnv.freq %>% filter(cnv == "-2") %>% select(genename, Freq, data), by=c("genename", "data"))  %>% mutate(Freq.x = Freq.x + Freq.y) %>% rename(Freq = Freq.x ) %>% mutate(ratio = Freq/sum, Freq.y = NULL) %>% arrange(data, desc(ratio) )  ###combine CNV == -1 and CNV == -2
