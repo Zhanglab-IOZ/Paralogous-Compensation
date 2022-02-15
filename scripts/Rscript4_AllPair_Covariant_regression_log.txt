@@ -2,18 +2,13 @@ library(dplyr);library(reshape2)
 library(ggplot2)
 
 
-tcga.cnv    <- readRDS("tcga.cBioportal.cnv.rds")
-tcga.exp    <- readRDS("tcga.cBioportal.exp.rds")
-#tcga.lof    <- readRDS("tcga.cBioportal.lof.rds")
-#tcga.arm    <- readRDS("tcga.cBioportal.arm.rds")
-#tcga.deficiency <- readRDS("tcga.cBioportal.deficiency.rds")
-#tcga.partial <- readRDS("tcga.cBioportal.partial.rds")
-#tcga.focal  <- readRDS("tcga.cBioportal.focal.rds")
-#tcga.survival  <- readRDS("tcga.cBioportal.survival.rds")
+tcga.cnv    <- readRDS("../datafiles/tcga.cBioportal.cnv.rds")
+tcga.exp    <- readRDS("../datafiles/tcga.cBioportal.exp.rds")
+
 
 
 ###gene pairs to be focused on
-all.pair  <- read.csv("all.pair.gi.csv", stringsAsFactors=F, row.names=1)
+all.pair  <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F, row.names=1)
 all.pair  <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
 
 all.pair.rev  <- all.pair %>% mutate(gene3 = gene1) %>% mutate( gene1 = gene2 ) %>% mutate(gene2 = gene3) %>% mutate( gene3 = NULL)
@@ -114,7 +109,7 @@ test_upregulation_res <- rbind.data.frame( test_upregulation_res, test.cnv.fit.r
 }
 
 
-write.csv( test_upregulation_res %>% arrange(Hugo_Symbol, data), "all_test_upregulation_res.regression.csv")
+write.csv( test_upregulation_res %>% arrange(Hugo_Symbol, data), "../datafiles/all_test_upregulation_res.regression.csv")
 
 
 
@@ -122,7 +117,7 @@ write.csv( test_upregulation_res %>% arrange(Hugo_Symbol, data), "all_test_upreg
 ###Plot. Boxplot of co-expression ratio
 ###lm_Estimate_para_exp Correlation Coefficient
 ###lm_Pvalue_para_exp P.value
-test_upregulation_res <- read.csv("all_test_upregulation_res.regression.csv", header = T, row.names = 1, stringsAsFactors = F)
+test_upregulation_res <- read.csv("../datafiles/all_test_upregulation_res.regression.csv", header = T, row.names = 1, stringsAsFactors = F)
 
 test_upregulation_res_summary <- test_upregulation_res %>% inner_join( all.pair %>% select(gene1, gene2, pair, robust), by=c("Hugo_Symbol" = "gene1", "gene2" = "gene2") ) %>% filter( lm_Pvalue_para_exp < 0.05 ) %>% mutate( correlation = ifelse(lm_Estimate_para_exp < 0, "Negative", "Positive") ) %>% select( robust, data, correlation ) %>% table() %>% as.data.frame() %>% inner_join(  test_upregulation_res %>% inner_join( all.pair %>% select(gene1, gene2, pair, robust), by=c("Hugo_Symbol" = "gene1", "gene2" = "gene2") ) %>% select( data, robust ) %>% table() %>% as.data.frame() %>% rename( Sum = Freq ), by=c("robust", "data") ) %>% mutate( ratio = Freq/Sum) %>% filter( Sum > 10 )
 
