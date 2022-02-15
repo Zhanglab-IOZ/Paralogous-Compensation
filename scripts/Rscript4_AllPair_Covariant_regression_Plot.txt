@@ -1,6 +1,14 @@
 library(dplyr);library(reshape2)
 library(ggplot2)
 
+all.pair  <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F, row.names=1)
+all.pair  <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
+
+all.pair.rev  <- all.pair %>% mutate(gene3 = gene1) %>% mutate( gene1 = gene2 ) %>% mutate(gene2 = gene3) %>% mutate( gene3 = NULL)
+all.pair  <- rbind.data.frame(all.pair, all.pair.rev)
+
+all.gene  <- all.pair %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+
 
 ###Part 2.
 ###Plot. Boxplot of co-expression ratio
