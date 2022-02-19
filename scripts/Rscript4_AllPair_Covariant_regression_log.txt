@@ -1,0 +1,113 @@
+library(dplyr);library(reshape2)
+library(ggplot2)
+
+
+tcga.cnv    <- readRDS("../datafiles/tcga.cBioportal.cnv.rds")
+tcga.exp    <- readRDS("../datafiles/tcga.cBioportal.exp.rds")
+
+
+
+###gene pairs to be focused on
+all.pair  <- read.csv("../datafiles/all.pair.gi.csv", stringsAsFactors=F, row.names=1)
+all.pair  <- all.pair %>% mutate(robust = ifelse(Y > 0, robust, "Others"))
+
+all.pair.rev  <- all.pair %>% mutate(gene3 = gene1) %>% mutate( gene1 = gene2 ) %>% mutate(gene2 = gene3) %>% mutate( gene3 = NULL)
+all.pair  <- rbind.data.frame(all.pair, all.pair.rev)
+
+all.gene  <- all.pair %>% select(pair, gene1, gene2) %>% melt(id.var="pair") %>% select(value) %>% unlist() %>% as.character() %>% unique()
+
+
+###Part 1.
+###Linear regression of expression level between paralogous genes.
+###Focal gene, CNV == -1 or CNV == 0
+###Tested gene, CNV == 0
+s = "OV"
+test_upregulation_res = data.frame()[as.numeric(0), ]
+tcga.list <- names( tcga.cnv )
+
+
+for( s in tcga.list ){
+print( paste(s, "started.", sep=" ") )
+
+test <-  tcga.cnv[[s]] %>% filter(value %in% c("-1", "0")) %>% filter( Hugo_Symbol %in% all.gene ) %>% inner_join( tcga.exp[[s]] %>% filter( Hugo_Symbol %in% all.gene ), by=c("Hugo_Symbol", "Sample") ) %>% mutate( PATIENT_ID = sub("-..$", "", Sample) ) %>% inner_join( tcga.survival[[s]], by=c( "PATIENT_ID" ))
+test <-  test %>% filter(TPM < 4, TPM > -4)
+
+if( nrow(test) == 0 ){next}
+
+
+test.cnv.freq   <- test %>% select(Hugo_Symbol, value) %>% table() %>% as.data.frame() %>% dcast(Hugo_Symbol~value, value.var="Freq") %>% rename( "Count_Shallow" = "-1", "Count_Diploid" = "0") %>% filter( Count_Shallow >=10, Count_Diploid >=10 )
+test            <- test %>% inner_join(test.cnv.freq, by=c("Hugo_Symbol"))
+
+
+test.cnv.fit  <- data.frame()[as.numeric(0), ] 
+for( i in unique(test$Hugo_Symbol) ){
+
+test_single      <- test %>% filter( Hugo_Symbol == i )
+test_single.SEX  <- length( grep("[A-Za-z]", test_single$SEX  %>% na.omit() %>% unique()) ) > 1
+test_single.RACE <- length( grep("[A-Za-z]", test_single$RACE %>% na.omit() %>% unique()) ) > 1
+
+
+if( test_single.SEX & test_single.RACE ){
+test.fit    <- (lm(TPM~value + AGE + SEX + RACE, data = test_single ) %>% summary)$coefficients
+}else if( test_single.SEX ){
+test.fit    <- (lm(TPM~value + AGE + SEX, data = test_single ) %>% summary)$coefficients
+}else if( test_single.RACE ){
+test.fit    <- (lm(TPM~value + AGE + RACE, data = test_single ) %>% summary)$coefficients
+}else{
+test.fit    <- (lm(TPM~value, data = test_single ) %>% summary)$coefficients
+}
+
+test.res      <- data.frame( "Hugo_Symbol" = i, "lm_Estimate" = test.fit["value", 1], "lm_Pvalue" = test.fit["value", 4] )
+test.cnv.fit  <- rbind.data.frame(test.cnv.fit, test.res)
+}
+
+print("CNV and expression finished.")
+
+
+###Duplicate pair cases. We required the paralog is diploid.
+test_para   <-  test %>% inner_join(all.pair, by=c("Hugo_Symbol" = "gene1")) %>% inner_join( tcga.cnv[[s]] %>% filter(value == 0), by=c("gene2" = "Hugo_Symbol", "Sample" = "Sample")) %>% inner_join( tcga.exp[[s]], by=c("gene2" = "Hugo_Symbol", "Sample" = "Sample"))
+test_para   <-  test_para %>% filter(TPM.y < 4, TPM.y > -4)
+
+if( nrow(test_para) == 0 ){next}
+
+test_para_freq <- test_para %>% select(Hugo_Symbol, gene2, value.x) %>% table() %>% as.data.frame() %>% dcast(Hugo_Symbol+gene2~value.x, value.var="Freq") %>% rename( "Count_Shallow_Para" = "-1", "Count_Diploid_Para" = "0") %>% filter( Count_Shallow_Para >=10, Count_Diploid_Para >=10 )
+test_para      <- test_para %>% inner_join(test_para_freq, by=c("Hugo_Symbol", "gene2"))
+
+if( nrow(test_para) == 0 ){next}
+
+
+test.cnv.fit_para  <- data.frame()[as.numeric(0), ] 
+for( i in unique(test_para$Hugo_Symbol) ){
+for( j in (test_para %>% filter( Hugo_Symbol == i ) %>% select(gene2) %>% unlist() %>% unique() ) ){
+
+test_para_single        <- test_para %>% filter( Hugo_Symbol == i, gene2 == j )
+test_para_single.var    <- var( test_para_single$TPM.x ) == 0
+test_para_single.SEX    <- length( grep("[A-Za-z]", test_para_single$SEX  %>% na.omit() %>% unique()) ) > 1
+test_para_single.RACE   <- length( grep("[A-Za-z]", test_para_single$RACE %>% na.omit() %>% unique()) ) > 1
+
+if( test_para_single.var ){next}
+
+if( test_para_single.SEX & test_para_single.RACE ){
+test.fit    <- (lm(TPM.y~TPM.x + value.x + AGE + SEX + RACE, data = test_para_single ) %>% summary)$coefficients
+}else if( test_para_single.SEX ){
+test.fit    <- (lm(TPM.y~TPM.x + value.x + AGE + SEX, data = test_para_single ) %>% summary)$coefficients
+}else if( test_para_single.RACE ){
+test.fit    <- (lm(TPM.y~TPM.x + value.x + AGE + RACE, data = test_para_single ) %>% summary)$coefficients
+}else{
+test.fit    <- (lm(TPM.y~TPM.x + value.x, data = test_para_single ) %>% summary)$coefficients
+}
+
+
+test.res    <- data.frame( "Hugo_Symbol" = i, "gene2" = j, "lm_Estimate_para_exp" = test.fit["TPM.x", 1], "lm_Pvalue_para_exp" = test.fit["TPM.x", 4], "lm_Estimate_para_cnv" = test.fit["value.x", 1], "lm_Pvalue_para_cnv" = test.fit["value.x", 4] )
+test.cnv.fit_para  <- rbind.data.frame(test.cnv.fit_para, test.res)
+}
+}
+
+
+test.cnv.fit.res   <- test.cnv.freq %>% mutate("data" = s) %>% inner_join( test.cnv.fit, by="Hugo_Symbol" ) %>% inner_join( test_para_freq, by="Hugo_Symbol" ) %>% inner_join( test.cnv.fit_para, by= c("Hugo_Symbol", "gene2") )
+test_upregulation_res <- rbind.data.frame( test_upregulation_res, test.cnv.fit.res )
+}
+
+
+write.csv( test_upregulation_res %>% arrange(Hugo_Symbol, data), "../datafiles/all_test_upregulation_res.regression.csv")
+
