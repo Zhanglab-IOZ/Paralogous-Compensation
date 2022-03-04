@@ -598,15 +598,30 @@ p.combine.expression.tau.tissue.chicken.postnatal  <- combine.pair.all.chicken %
 
 
 
+###Controlling Pleiotropy
+library('MatchIt')
+
+data <- combine.pair.all %>% inner_join( gene.expression.prenatal, by=c("gene1" = "genename") ) %>% inner_join( gene.expression.prenatal, by=c("gene2" = "genename") ) %>% mutate(TPM = TPM.x + TPM.y) %>% mutate(TPM = TPM/2) %>% mutate(TPM = log2(TPM + 1)) %>% inner_join( gene.tau.prenatal, by=c("gene1" = "genename") ) %>% inner_join( gene.tau.prenatal, by=c("gene2" = "genename") ) %>% mutate(tau = tau.x + tau.y) %>% mutate(tau = tau/2) %>% inner_join(Go_sum %>% mutate(type = NULL), by=c("gene1" = "gene1", "gene2" = "gene2") ) %>% mutate( BP_sum = BP_sum, MF_sum = MF_sum + 1, CC_sum = CC_sum + 1 )
+
+data_raw         <- data %>% mutate(type=ifelse(type=='Robust', 'Y', 'N'))
+data_raw$type    <- factor(data_raw$type,levels=c('N','Y'))
+
+data_match_out    <- matchit(type~tau+BP_sum, data=data_raw, method='nearest', distance='glm')
+data_matched      <- match.data( data_match_out )
+data_matched$type <- factor(data_matched$type,levels=c('Y','N'))
+
+p_matchsample     <- data_matched  %>%  ggplot(aes(x=type, y=TPM)) + geom_violin(aes(fill = type)) + geom_boxplot(outlier.shape=NA, width=0.2) + geom_signif(comparisons = list(c("Y", "N")),  textsize=5.8, y_position=15) + scale_fill_manual(values=c("#7372B7", "#AAAAAA"), labels=c("Core", "Non-core" ) ) + theme_bw() + theme(title=element_text(size=20, face="bold"), axis.text=element_text(size=17), legend.text=element_text(size=17), plot.title=element_text(size=20, face="bold"), plot.tag=element_text(size=28, face="bold"), legend.position = "none" ) + xlab("Negative GI type") + ylab("Expression level in  prenatal samples\n(pleiotropy controlled)") + scale_x_discrete(labels=c("Core", "Non-core"))
+
+
+
 ###Compositary plot
 pdf("../Figure5_Robust.gi.Features.identity_2021Oct.pdf", width=18, height=18)
 grid.arrange(  p.combine.branch + labs(tag="A"),  p.GO.BP + labs(tag="B"), p.combine.identity + labs(tag="C"), p.combine.expression.tau  + labs(tag="C"), p.combine.expression.level + labs(tag="C"), p.combine.identity.chicken + labs(tag="D"), p.combine.expression.tau.chicken  + labs(tag="D"), p.combine.expression.level.chicken  + labs(tag="D"), layout_matrix = matrix(c( rep(1,2), 2:8 ), nrow=3, byrow=T) )
 dev.off()
 
-
 pdf("../FigureS5_Robust.gi.Features.identity.supplementary6_2021Oct.pdf", width=20, height=18)
-grid.arrange(  p.combine.ohnologs + labs(tag="A"),  p.GO.CC + labs(tag="C"),
- p.combine.expression.tau.tissue + labs(tag="B"), p.combine.expression.tau.postnatal + labs(tag="B"),  p.combine.expression.tau.postnatal.tissue + labs(tag="B"),  p.combine.expression.level.postnatal + labs(tag="B"),  p.combine.expression.tau.tissue.chicken + labs(tag="B"), p.combine.expression.tau.chicken.postnatal + labs(tag="B"), p.combine.expression.tau.tissue.chicken.postnatal + labs(tag="B"),   p.combine.expression.level.chicken.postnatal + labs(tag="B"), layout_matrix = matrix( rep(1:10,c(4,4,2,2,2,2,2,2,2,2)), nrow=3, byrow=T) )
+grid.arrange(  p.combine.ohnologs + labs(tag="A"),  p.GO.CC + labs(tag="C"), p_matchsample + labs(tag='D'), 
+p.combine.expression.tau.tissue + labs(tag="B"), p.combine.expression.tau.postnatal + labs(tag="B"),  p.combine.expression.tau.postnatal.tissue + labs(tag="B"),  p.combine.expression.level.postnatal + labs(tag="B"),  p.combine.expression.tau.tissue.chicken + labs(tag="B"), p.combine.expression.tau.chicken.postnatal + labs(tag="B"), p.combine.expression.tau.tissue.chicken.postnatal + labs(tag="B"),   p.combine.expression.level.chicken.postnatal + labs(tag="B"), layout_matrix = matrix( rep(1:11,c(4,4,4,3,3,3,3,3,3,3,3)), nrow=3, byrow=T) )
 dev.off()
 
 
